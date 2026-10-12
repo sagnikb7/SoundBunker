@@ -1,0 +1,18 @@
+Verification recorded 12 October 2026
+Simulator and XCTest bundle: compiled, not run
+Device build: unsigned arm64
+MinimumOSVersion: 15.0; Mach-O minos: 15.0; SDK: 27.0
+Mac host smoke: PASS; playback/pause/seek/completion/remote URL rejection
+iOS runtime/device execution: unavailable; no installed runtimes or connected devices
+
+OfflineMusicPlayer-build.log
+2026-10-12 13:11:47.129 appintentsmetadataprocessor[88448:8753338] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+OfflineMusicPlayer.xcodeproj: OfflineMusicPlayerTests: ld: warning: building for iOS-simulator-15.0, but linking with dylib '@rpath/XCTest.framework/XCTest' which was built for newer version 17.0
+OfflineMusicPlayer.xcodeproj: OfflineMusicPlayerTests: ld: warning: building for iOS-simulator-15.0, but linking with dylib '@rpath/libXCTestSwiftSupport.dylib' which was built for newer version 17.0
+OfflineMusicPlayer.xcodeproj: OfflineMusicPlayerTests: ld: warning: building for iOS-simulator-15.0, but linking with dylib '@rpath/XCTest.framework/XCTest' which was built for newer version 17.0
+OfflineMusicPlayer.xcodeproj: OfflineMusicPlayerTests: ld: warning: building for iOS-simulator-15.0, but linking with dylib '@rpath/libXCTestSwiftSupport.dylib' which was built for newer version 17.0
+2026-10-12 13:11:48.556 appintentsmetadataprocessor[88724:8753764] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+** TEST BUILD SUCCEEDED **
+OfflineMusicPlayer-device-build.log
+2026-10-12 13:11:55.859 appintentsmetadataprocessor[88824:8754189] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+** BUILD SUCCEEDED **

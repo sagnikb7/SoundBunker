@@ -1,0 +1,186 @@
+import SwiftUI
+
+struct SearchView: View {
+    @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var playback: PlaybackCoordinator
+    @State private var query = ""
+    var body: some View {
+        Group {
+            if query.isEmpty { EmptyLibraryView(symbol: "magnifyingglass", title: "Find your music", detail: "Search songs, artists, albums and playlists on your device.") }
+            else {
+                List {
+                    Section("Songs") { ForEach(songs) { track in SongRow(track: track) { playback.play(songs, startingAt: track) } } }
+                    Section("Albums") { ForEach(AlbumGroup.make(library.visibleTracks).filter { matches($0.title) || matches($0.artist) }) { album in NavigationLink(album.title) { AlbumDetailView(album: album) } } }
+                    Section("Artists") { ForEach(Set(library.visibleTracks.map(\.artist)).sorted().filter(matches), id: \.self) { artist in NavigationLink(artist) { SongListView(title: artist, tracks: library.sortedTracks.filter { $0.artist == artist }) } } }
+                    Section("Playlists") { ForEach(library.playlists.filter { matches($0.name) }) { playlist in NavigationLink(playlist.name) { PlaylistDetailView(id: playlist.id) } } }
+                    if songs.isEmpty { Text("No matching songs").foregroundColor(.secondary) }
+                }.listStyle(.plain)
+            }
+        }.navigationTitle("Search").searchable(text: $query, prompt: "Songs, artists, albums")
+    }
+    private func matches(_ value: String) -> Bool { value.localizedCaseInsensitiveContains(query) }
+    private var songs: [Track] { library.sortedTracks.filter { matches($0.title) || matches($0.artist) || matches($0.album) } }
+}
+
+struct PlaylistsView: View {
+    @EnvironmentObject private var library: LibraryStore
+    @State private var creating = false
+    var body: some View {
+        List {
+            NavigationLink { SongListView(title: "Favorites", tracks: library.sortedTracks.filter(\.favorite)) } label: { Label("Favorites", systemImage: "heart.fill").foregroundColor(.pink) }
+            ForEach(library.playlists) { playlist in NavigationLink { PlaylistDetailView(id: playlist.id) } label: {
+                HStack { Image(systemName: "music.note.list").font(.title2).foregroundColor(.blue).frame(width: 40, height: 44)
+                    VStack(alignment: .leading) { Text(playlist.name); Text("\(playlist.trackIDs.count) songs").font(.footnote).foregroundColor(.secondary) }
+                }
+            } }.onDelete { indices in indices.map { library.playlists[$0] }.forEach(library.deletePlaylist) }
+            Button("New Playlist…") { creating = true }
+        }.navigationTitle("Playlists").toolbar { EditButton() }
+            .sheet(isPresented: $creating) { NameSheet(title: "New Playlist", value: "") { library.createPlaylist($0) } }
+    }
+}
+struct NameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var title: String
+    @State var value: String
+    var save: (String) -> Void
+    var body: some View {
+        NavigationView {
+            Form { TextField("Playlist name", text: $value) }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Save") { save(value); dismiss() }.disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                }
+        }.navigationViewStyle(.stack)
+    }
+}
+struct PlaylistDetailView: View {
+    @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var playback: PlaybackCoordinator
+    var id: UUID
+    @State private var adding = false
+    @State private var renaming = false
+    private var playlist: MusicPlaylist? { library.playlists.first { $0.id == id } }
+    var body: some View {
+        List {
+            if let playlist = playlist {
+                PlayButtons(tracks: playlist.trackIDs.compactMap(library.track))
+                ForEach(Array(playlist.trackIDs.enumerated()), id: \.offset) { entry in
+                    if let track = library.track(entry.element) { SongRow(track: track) { playback.play(playlist.trackIDs.compactMap(library.track), startingAt: track) } }
+                    else { Label("Unavailable song", systemImage: "exclamationmark.triangle").foregroundColor(.secondary) }
+                }.onDelete { indices in var changed = playlist; changed.trackIDs.remove(atOffsets: indices); library.changePlaylist(changed) }
+                    .onMove { from, to in var changed = playlist; changed.trackIDs.move(fromOffsets: from, toOffset: to); library.changePlaylist(changed) }
+                Button("Add Songs") { adding = true }
+                Button("Rename Playlist") { renaming = true }
+            }
+        }.listStyle(.plain).navigationTitle(playlist?.name ?? "Playlist").toolbar { EditButton() }
+            .sheet(isPresented: $adding) { NavigationView { List(library.sortedTracks) { track in Button {
+                library.toggleTrack(track.id, in: id)
+            } label: {
+                HStack {
+                    ArtworkView(track: track).frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(track.title).font(.callout).foregroundColor(.primary).lineLimit(1)
+                        Text(track.artist).font(.footnote).foregroundColor(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    let added = playlist?.trackIDs.contains(track.id) ?? false
+                    Image(systemName: added ? "checkmark.circle.fill" : "plus.circle").foregroundColor(.blue)
+                }.frame(minHeight: 44)
+            }
+                .accessibilityLabel("\(track.title)\((playlist?.trackIDs.contains(track.id) ?? false) ? ", remove from playlist" : ", add to playlist")")
+                .accessibilityValue((playlist?.trackIDs.contains(track.id) ?? false) ? "Added" : "Not added") }.navigationTitle("Add Songs").toolbar { Button("Done") { adding = false } } }.navigationViewStyle(.stack) }
+            .sheet(isPresented: $renaming) { NameSheet(title: "Rename Playlist", value: playlist?.name ?? "") { name in if var changed = playlist { changed.name = name; library.changePlaylist(changed) } } }
+    }
+}
+
+struct SourceSettingsView: View {
+    @EnvironmentObject private var library: LibraryStore
+    @State private var removing: MusicSource?
+    var body: some View {
+        List {
+            Section {
+                ForEach(library.sources) { source in
+                    NavigationLink { SourceDetailView(id: source.id) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(source.name, systemImage: "folder")
+                            Text(source.needsReconnect ? "Reconnect required" : source.enabled ? "Scanning enabled" : "Excluded from scanning").font(.footnote).foregroundColor(.secondary)
+                        }
+                    }.contextMenu {
+                        Button("Rescan") { library.rescan(only: source.id) }
+                        if !source.isOwned { Button("Remove from Library", role: .destructive) { removing = source } }
+                    }
+                }
+                Button("Add Music Folder…") { library.pickerRequest = PickerRequest(folders: true) }
+            } footer: {
+                Text("In Files, choose Browse → On My iPod and select a folder. iOS grants access to selected folders, not the entire device. SoundBunker’s own folder is scanned automatically. Source removal never deletes your audio.")
+            }
+        }.navigationTitle("Music Folders").alert("Remove this source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button("Remove", role: .destructive) { if let source = removing { library.removeSource(source) }; removing = nil }
+            Button("Cancel", role: .cancel) { removing = nil }
+        } message: { Text("Your music files stay where they are. Tracks shared with another folder stay accessible.") }
+    }
+}
+struct SourceDetailView: View {
+    @EnvironmentObject private var library: LibraryStore
+    var id: UUID
+    private var source: MusicSource? { library.sources.first { $0.id == id } }
+    var body: some View {
+        List {
+            if let source = source {
+                Section {
+                    Toggle("Scan this folder", isOn: Binding(get: { self.source?.enabled ?? false }, set: { library.setEnabled(id, enabled: $0) })).disabled(library.busy)
+                    Button("Rescan Folder") { library.rescan(only: id) }.disabled(library.scanning || !source.enabled)
+                    if !source.isOwned { Button("Reconnect Folder…") { library.pickerRequest = PickerRequest(folders: true, reconnecting: id) } }
+                } footer: { Text(source.isOwned ? "Files → On My iPod → SoundBunker. All audio inside this app folder is found automatically; no Music subfolder is required." : "Keep this folder on your device. Cloud-only files are skipped.") }
+                Section("Excluded Subfolders") {
+                    ForEach(source.excludedPaths, id: \.self) { path in
+                        HStack { Text(path).font(.subheadline); Spacer(); Button("Include") { library.includeFolder(id, path: path) }.disabled(library.busy) }
+                    }
+                    Button("Exclude a Folder…") { library.pickerRequest = PickerRequest(folders: true, excludeFrom: id) }.disabled(library.busy)
+                }
+            }
+        }.navigationTitle(source?.name ?? "Folder").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+
+struct AddToPlaylistView: View {
+    @EnvironmentObject private var library: LibraryStore
+    @Environment(\.dismiss) private var dismiss
+    var track: Track
+    @State private var creating = false
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    HStack(spacing: 12) {
+                        ArtworkView(track: track).frame(width: 48, height: 48)
+                        VStack(alignment: .leading) { Text(track.title).font(.headline); Text(track.artist).font(.subheadline).foregroundColor(.secondary) }
+                    }
+                }
+                Section("Playlists") {
+                    ForEach(library.playlists) { playlist in
+                        let added = playlist.trackIDs.contains(track.id)
+                        Button { library.toggleTrack(track.id, in: playlist.id) } label: {
+                            HStack(spacing: 12) {
+                                ArtworkView(track: playlist.trackIDs.first.flatMap(library.track)).frame(width: 40, height: 40)
+                                Text(playlist.name).foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: added ? "checkmark.circle.fill" : "plus.circle").foregroundColor(.blue)
+                            }.frame(minHeight: 44)
+                        }.accessibilityLabel("\(playlist.name)\(added ? ", remove song" : ", add song")")
+                            .accessibilityValue(added ? "Added" : "Not added")
+                    }
+                    Button("New Playlist…") { creating = true }
+                }
+            }.navigationTitle("Add to Playlist").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .sheet(isPresented: $creating) {
+                    NameSheet(title: "New Playlist", value: "") { name in
+                        library.createPlaylist(name)
+                        if let playlist = library.playlists.last { library.addTrack(track.id, to: playlist.id) }
+                    }
+                }
+        }.navigationViewStyle(.stack)
+    }
+}

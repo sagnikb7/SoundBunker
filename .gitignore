@@ -1,0 +1,21 @@
+.DS_Store
+/DerivedData/
+/build/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+
+__pycache__/
+*.pyc
+/dist/
+
+# Local compiler receipts may contain machine paths. QA summaries/images stay versioned.
+docs/testing/verification/*tests.txt
+docs/testing/verification/archive/*tests*.txt
+*.ipa
+*.ipa.zip
+*.dSYM/
+.env
+.env.*
+*.p12
+*.mobileprovision

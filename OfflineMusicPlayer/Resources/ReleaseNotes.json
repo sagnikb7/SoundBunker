@@ -1,0 +1,12 @@
+{
+  "version": "1.1.2",
+  "sections": [
+    {
+      "title": "Fixed",
+      "items": [
+        "Playback rechecks enabled folders and exclusions before opening each indexed file.",
+        "Local file access rejects symbolic links and paths escaping the selected music folder."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,883 @@
+{
+ "meta": {
+  "name": "Offline Music Player — UI reference",
+  "version": "1.0",
+  "generated": "2026-10-12",
+  "device": "iPod touch 7th gen, 320×568 pt, iOS 15, home button, portrait",
+  "purpose": "Visual and behavioral reference for implementing the SwiftUI app in the engineering spec. Not production code. Do not embed or port this HTML; map it to native SwiftUI/UIKit.",
+  "precedence": "The engineering spec (Offline Music Player — Final Product & Engineering Specification v1.0) wins over this document wherever they differ."
+ },
+ "tokens": {
+  "note": "Hex/rgba values are those used in the prototype. Implement with the named semantic colors, not hex. The semantic mapping is from memory of Apple’s published values — verify in Xcode.",
+  "colors": [
+   [
+    "--bg",
+    "systemBackground",
+    "#000000",
+    "#FFFFFF"
+   ],
+   [
+    "--bg2",
+    "secondarySystemBackground (grouped cells, buttons)",
+    "#1C1C1E",
+    "#F2F2F7"
+   ],
+   [
+    "--bg3",
+    "tertiarySystemBackground / pressed state",
+    "#2C2C2E",
+    "#E5E5EA (prototype value; use the system color)"
+   ],
+   [
+    "--label",
+    "label",
+    "#FFFFFF",
+    "#000000"
+   ],
+   [
+    "--label2",
+    "secondaryLabel",
+    "rgba(235,235,245,.60)",
+    "rgba(60,60,67,.60)"
+   ],
+   [
+    "--label3",
+    "tertiaryLabel",
+    "rgba(235,235,245,.30)",
+    "rgba(60,60,67,.30)"
+   ],
+   [
+    "--sep",
+    "separator",
+    "rgba(84,84,88,.65)",
+    "rgba(60,60,67,.29)"
+   ],
+   [
+    "--fill",
+    "secondarySystemFill (search field, slider track, active pill)",
+    "rgba(120,120,128,.36)",
+    "rgba(120,120,128,.16)"
+   ],
+   [
+    "--blue",
+    "accentColor = systemBlue",
+    "#0A84FF",
+    "#007AFF"
+   ],
+   [
+    "--red",
+    "systemRed (destructive)",
+    "#FF453A",
+    "#FF3B30"
+   ],
+   [
+    "--green",
+    "systemGreen (switch on)",
+    "#30D158",
+    "#34C759"
+   ],
+   [
+    "--bar",
+    "system tab/navigation bar appearance — do not customize",
+    "#161618",
+    "#F9F9F9"
+   ]
+  ],
+  "typography": [
+   [
+    "Large title",
+    "34 bold",
+    ".largeTitle"
+   ],
+   [
+    "Nav title / button label / primary text",
+    "17 semibold / 17",
+    ".headline / .body"
+   ],
+   [
+    "Song title in rows",
+    "16",
+    ".callout"
+   ],
+   [
+    "Secondary row text",
+    "15 / 13",
+    ".subheadline / .footnote"
+   ],
+   [
+    "Section header (Recently Added)",
+    "20 bold",
+    ".title3 (bold)"
+   ],
+   [
+    "Empty-state heading",
+    "22 bold",
+    ".title2 (bold)"
+   ],
+   [
+    "Now Playing title",
+    "19 semibold",
+    ".title3 (semibold), nearest style"
+   ],
+   [
+    "Captions, time labels, tab labels",
+    "12 / 11 / 10",
+    ".caption / .caption2 (tab labels are system)"
+   ]
+  ],
+  "typographyNote": "The prototype uses fixed px for layout fidelity. The app must use Dynamic Type text styles and let row heights grow (minHeight, not fixed height)."
+ },
+ "metrics": [
+  [
+   "Logical screen",
+   "320 × 568 pt"
+  ],
+  [
+   "Status bar",
+   "20 pt (no notch)"
+  ],
+  [
+   "Navigation bar",
+   "44 pt (+ large title ≈ 52 pt when expanded)"
+  ],
+  [
+   "Tab bar",
+   "49 pt"
+  ],
+  [
+   "Mini-player",
+   "48 pt, directly above the tab bar"
+  ],
+  [
+   "Home indicator inset",
+   "0 (home-button device)"
+  ],
+  [
+   "Row — destinations / settings",
+   "44 pt"
+  ],
+  [
+   "Row — songs / tracks",
+   "52 pt, artwork 40 pt, radius 4"
+  ],
+  [
+   "Row — artist / folder",
+   "56 pt (artwork 40 / icon 28)"
+  ],
+  [
+   "Row — playlist",
+   "60 pt, artwork 48 pt"
+  ],
+  [
+   "Mini-player artwork",
+   "36 pt"
+  ],
+  [
+   "Album grid tile",
+   "138 pt wide, 2 columns, 12 pt column gap, 14 pt row gap, 16 pt side margins"
+  ],
+  [
+   "Recently Added tile",
+   "112 pt"
+  ],
+  [
+   "Album/playlist header artwork",
+   "148 pt"
+  ],
+  [
+   "Now Playing artwork",
+   "≤ 240 pt, square, flexes with height; 88% scale when paused"
+  ],
+  [
+   "Horizontal margins",
+   "16 pt (Now Playing 24 pt)"
+  ],
+  [
+   "Min touch target",
+   "44 × 44 pt (ellipsis buttons are 36 × 44 in the prototype — enlarge)"
+  ],
+  [
+   "Corner radii",
+   "Artwork 4–8 pt; grouped lists 10 pt; buttons 10–12 pt; sheets 12 pt"
+  ]
+ ],
+ "symbols": [
+  [
+   "Songs",
+   "music.note"
+  ],
+  [
+   "Playlists tab / playlists",
+   "music.note.list"
+  ],
+  [
+   "Albums",
+   "square.stack"
+  ],
+  [
+   "Artists",
+   "music.mic"
+  ],
+  [
+   "Genres",
+   "guitars (alt: waveform)"
+  ],
+  [
+   "Folders",
+   "folder / folder.fill"
+  ],
+  [
+   "Add folder",
+   "folder.badge.plus"
+  ],
+  [
+   "Recently Added",
+   "clock"
+  ],
+  [
+   "Search",
+   "magnifyingglass"
+  ],
+  [
+   "Settings",
+   "gear"
+  ],
+  [
+   "Play / Pause",
+   "play.fill / pause.fill"
+  ],
+  [
+   "Previous / Next",
+   "backward.fill / forward.fill"
+  ],
+  [
+   "Shuffle",
+   "shuffle"
+  ],
+  [
+   "Repeat",
+   "repeat / repeat.1"
+  ],
+  [
+   "Queue",
+   "list.bullet"
+  ],
+  [
+   "Lyrics",
+   "quote.bubble"
+  ],
+  [
+   "More",
+   "ellipsis"
+  ],
+  [
+   "Favorite",
+   "heart / heart.fill"
+  ],
+  [
+   "Rescan",
+   "arrow.clockwise"
+  ],
+  [
+   "Remove",
+   "trash"
+  ],
+  [
+   "Warning",
+   "exclamationmark.triangle.fill"
+  ],
+  [
+   "Dismiss Now Playing",
+   "chevron.down"
+  ],
+  [
+   "Play Next",
+   "text.insert"
+  ]
+ ],
+ "symbolsNote": "Prototype icons are inline-SVG approximations. Symbol names above are best-effort; confirm each exists on iOS 15 in the SF Symbols app (not verified here).",
+ "components": [
+  [
+   "TabBar",
+   "4 tabs: Library, Playlists, Search, Settings",
+   "TabView (system styling)."
+  ],
+  [
+   "MiniPlayer",
+   "Artwork 36, title, play/pause, next; tap → Now Playing",
+   "No public SwiftUI tab-bar accessory API on iOS 15 as far as I know (verify). Options: overlay above the measured tab-bar height (49 pt), or a UITabBarController-based container. Must persist across pushes in every tab."
+  ],
+  [
+   "NavBar",
+   "Large title on tab roots; inline title + back label on pushed screens",
+   "NavigationView + .navigationBarTitleDisplayMode"
+  ],
+  [
+   "SongRow",
+   "artwork 40, title, artist, ellipsis menu, swipe Play Next",
+   "List row; Menu; .swipeActions"
+  ],
+  [
+   "TrackRow (numbered)",
+   "number, title, duration, ellipsis",
+   "List row"
+  ],
+  [
+   "AlbumTile",
+   "square art, title, artist",
+   "LazyVGrid cell / LazyHStack item"
+  ],
+  [
+   "ArtistRow",
+   "circular art, name, counts, chevron",
+   "NavigationLink row"
+  ],
+  [
+   "FolderRow",
+   "folder.fill, name, “N songs” or status, chevron, context menu",
+   "NavigationLink + .contextMenu"
+  ],
+  [
+   "PlaylistRow",
+   "2×2 collage, name, count, chevron",
+   "NavigationLink row"
+  ],
+  [
+   "PlayShuffleButtons",
+   "Two equal bordered buttons",
+   "Button(.bordered), accent tint"
+  ],
+  [
+   "SearchField",
+   "Native inset search",
+   ".searchable"
+  ],
+  [
+   "SeekBar",
+   "4 pt track, elapsed/remaining labels, drag to seek",
+   "Custom (SwiftUI Slider can’t be restyled thin on iOS 15); needs accessibility value + adjustable action"
+  ],
+  [
+   "LyricsView",
+   "Scrolling lines, current-line emphasis, tap-to-seek",
+   "ScrollViewReader + LazyVStack"
+  ],
+  [
+   "ScanSheet",
+   "Title, path, progress, 2 counters, Cancel",
+   ".sheet; ProgressView(value:)"
+  ],
+  [
+   "Alert / ContextMenu / ActionMenu",
+   "Native",
+   ".alert / .contextMenu / Menu; text-field alert needs a UIKit bridge on iOS 15"
+  ],
+  [
+   "GroupedList (Settings)",
+   "Inset grouped sections with footers",
+   "List(.insetGrouped)"
+  ]
+ ],
+ "navigation": [
+  [
+   "Library",
+   "tap Songs",
+   "Songs"
+  ],
+  [
+   "Library",
+   "tap Albums",
+   "Albums"
+  ],
+  [
+   "Library",
+   "tap Artists",
+   "Artists"
+  ],
+  [
+   "Library",
+   "tap Genres",
+   "Genres"
+  ],
+  [
+   "Library",
+   "tap Folders",
+   "Folders"
+  ],
+  [
+   "Library",
+   "tap Recently Added / See All",
+   "Recently Added (album grid)"
+  ],
+  [
+   "Library",
+   "tap album tile",
+   "Album details"
+  ],
+  [
+   "Songs",
+   "tap song row",
+   "(playback starts, mini-player appears)"
+  ],
+  [
+   "Albums",
+   "tap tile",
+   "Album details"
+  ],
+  [
+   "Album details",
+   "tap track",
+   "(playback starts)"
+  ],
+  [
+   "Album details",
+   "tap artist name",
+   "Artist details"
+  ],
+  [
+   "Artists",
+   "tap row",
+   "Artist details"
+  ],
+  [
+   "Artist details",
+   "tap album",
+   "Album details"
+  ],
+  [
+   "Genres",
+   "tap genre",
+   "Songs filtered by genre"
+  ],
+  [
+   "Folders",
+   "tap source / subfolder",
+   "Folder contents"
+  ],
+  [
+   "Folder contents",
+   "tap track",
+   "(playback starts)"
+  ],
+  [
+   "Folders / Music Folders",
+   "Add Folder",
+   "System document picker → Scanning"
+  ],
+  [
+   "Folders",
+   "long-press row",
+   "Rescan / Remove menu"
+  ],
+  [
+   "Any tab",
+   "tap mini-player",
+   "Now Playing (full-screen)"
+  ],
+  [
+   "Now Playing",
+   "tap lyrics button",
+   "Lyrics mode"
+  ],
+  [
+   "Now Playing",
+   "tap queue button",
+   "Up Next mode"
+  ],
+  [
+   "Lyrics / Up Next",
+   "tap ✕ or compact header",
+   "Now Playing artwork mode"
+  ],
+  [
+   "Now Playing",
+   "tap chevron.down",
+   "Dismiss"
+  ],
+  [
+   "Playlists",
+   "tap row",
+   "Playlist details"
+  ],
+  [
+   "Playlists",
+   "New Playlist…",
+   "Name prompt → empty Playlist details"
+  ],
+  [
+   "Playlist details",
+   "tap track",
+   "(playback starts)"
+  ],
+  [
+   "Playlist details",
+   "Edit",
+   "Edit mode"
+  ],
+  [
+   "Search",
+   "type",
+   "Categorized results"
+  ],
+  [
+   "Search results",
+   "tap song",
+   "(playback starts)"
+  ],
+  [
+   "Search results",
+   "tap album/artist/playlist",
+   "Respective details"
+  ],
+  [
+   "Settings",
+   "Music Folders",
+   "Music Folders"
+  ],
+  [
+   "Settings",
+   "Rescan Library",
+   "Scanning sheet"
+  ],
+  [
+   "Settings",
+   "Library Statistics / Playback Preferences / Supported Audio Formats",
+   "Simple list screens"
+  ],
+  [
+   "Music Folders",
+   "Add Folder…",
+   "System document picker → Scanning"
+  ],
+  [
+   "Music Folders",
+   "Edit / long-press",
+   "Remove from Library confirmation"
+  ]
+ ],
+ "coverage": [
+  [
+   "Conflict",
+   "Folder picker in the interactive prototype is a mock",
+   "Use UIDocumentPickerViewController; it cannot be restyled. Persist the bookmark, then scan."
+  ],
+  [
+   "Conflict",
+   "“Supported Audio Formats” is a static list",
+   "Spec §6 says validate by decoder playback. Populate from verified results (CODEC_SUPPORT.md); do not list FLAC/Ogg/Opus as supported unless verified."
+  ],
+  [
+   "Conflict",
+   "Library Statistics, song counts, scan counters, sample catalog and lyrics are invented",
+   "Bind to real data; remove all sample content from the shipped app."
+  ],
+  [
+   "Decision needed",
+   "“Resume Playback” toggle semantics",
+   "Spec §7: restore last track/position/queue without auto-playing. Confirm label and behavior."
+  ],
+  [
+   "Decision needed",
+   "Now Playing presentation",
+   "Full-screen in the prototype for height; use fullScreenCover, or a card-style .sheet for system dismissal gestures."
+  ],
+  [
+   "Decision needed",
+   "Mini-player over TabView on iOS 15",
+   "See component table; verify on the 4-inch device."
+  ],
+  [
+   "Decision needed",
+   "Folder hierarchy source",
+   "Needs relativePath (or equivalent) per Track; not in the spec’s conceptual entities."
+  ],
+  [
+   "Gap",
+   "Queue editing UI",
+   "Up Next is tap-to-jump only. Reorder/remove not designed."
+  ],
+  [
+   "Gap",
+   "App-owned Documents/Music source",
+   "Should appear as a source row (e.g. “On My iPod touch › Music”); not drawn separately."
+  ],
+  [
+   "Gap",
+   "Dynamic Type accessibility sizes, VoiceOver, landscape",
+   "Not designed or tested. Prototype only has aria-labels on icon buttons."
+  ],
+  [
+   "Gap",
+   "Artist details screen",
+   "Minimal (albums + songs) in the interactive prototype; not one of the 15 required screens."
+  ],
+  [
+   "Not verified",
+   "All iOS 15 runtime behavior",
+   "HTML rendered in a desktop webview; nothing here proves iPod touch behavior, performance or API availability."
+  ]
+ ],
+ "screens": [
+  {
+   "id": "01-first-launch",
+   "title": "Screen 1 — First launch / empty library",
+   "swiftUI": "NavigationView › empty-state VStack (Image(systemName:\"folder.badge.plus\") 64–72 pt, Text title2 bold, Text subheadline secondary, Button(.borderedProminent) “Add Music Folder”, Label footnote “Your music stays on your device.”). .navigationTitle(\"Library\"), large display mode. Shown only when MusicSource count == 0.",
+   "data": "MusicSource: count == 0. No other fetches.",
+   "states": "empty (this frame). Tab bar and other tabs remain usable; Playlists/Search show their own empty states.",
+   "actions": "“Add Music Folder” → presents UIDocumentPickerViewController (system UI, not styleable) → on success persist security-scoped bookmark → create MusicSource → present Scan sheet (screen 15).",
+   "notes": "No account, login or subscription UI. No mini-player (no current track)."
+  },
+  {
+   "id": "02-library-home",
+   "title": "Screen 2 — Library home",
+   "swiftUI": "NavigationView › List(.plain) with NavigationLink rows, then a “Recently Added” section: horizontal ScrollView { LazyHStack } of album tiles (112 pt artwork). .navigationTitle(\"Library\") large. Mini-player + TabView are siblings (see component inventory).",
+   "data": "Static destination list. Recently Added: Album sorted by dateAdded desc, limit ≈ 5–10 (assumption: Album or Track needs a dateAdded attribute; the spec does not name one).",
+   "states": "populated (this frame); empty = screen 1; scanning shows partial results incrementally.",
+   "actions": "Songs / Albums / Artists / Genres / Folders / Recently Added rows push the respective screens. Tile tap → Album details. “See All” → Recently Added grid.",
+   "notes": "Row height 44 pt. Large title collapses to inline on scroll (standard NavigationView behavior)."
+  },
+  {
+   "id": "02L-library-home-light",
+   "title": "Screen 2 — Library home (light appearance)",
+   "swiftUI": "Same view as screen 2. Do not branch on colorScheme; use semantic colors so both appearances are automatic.",
+   "data": "—",
+   "states": "light",
+   "actions": "—",
+   "notes": "Required deliverable: Library and Now Playing in light appearance."
+  },
+  {
+   "id": "03-songs",
+   "title": "Screen 3 — All Songs",
+   "swiftUI": "List(.plain) + search (.searchable or in-list field as drawn). Header rows: count + Menu for sort, then two Buttons (Play / Shuffle, .bordered). Row = HStack { artwork 40×40, VStack(title callout, artist footnote secondary), Spacer, Menu(ellipsis) }. Load thumbnails asynchronously from ArtworkCache.",
+   "data": "Track sorted by title (default), artist, album or dateAdded. Count = fetch count. The prototype shows a 38-song sample while the header says “1,434 Songs” (placeholder).",
+   "states": "populated; filtered (search); current track highlighted (accent-colored title); unavailable rows (see S1).",
+   "actions": "Row tap → PlaybackCoordinator.play(queue: songs in current order, startAt: track); mini-player appears; Now Playing opens from the mini-player. Ellipsis → context menu. Swipe left → Play Next (.swipeActions, iOS 15).",
+   "notes": "Tapping a song does NOT auto-open Now Playing (matches Apple Music). Row height 52 pt."
+  },
+  {
+   "id": "03b-songs-context-menu",
+   "title": "Screen 3 — song ellipsis / context menu",
+   "swiftUI": "Menu { Button(\"Play Next\", systemImage:\"text.insert\") … } or .contextMenu on the row with the same items: Play Next, Add to Playlist…, Go to Album, Add to Favorites.",
+   "data": "Play Next mutates the PlaybackCoordinator queue. Add to Favorites → Favorites playlist entry.",
+   "states": "menu open",
+   "actions": "Go to Album → pushes Album details onto the current navigation stack.",
+   "notes": "Use the native menu; do not draw a custom popover."
+  },
+  {
+   "id": "04-albums",
+   "title": "Screen 4 — Albums",
+   "swiftUI": "ScrollView { LazyVGrid(columns:[GridItem(.flexible(),spacing:12),GridItem(.flexible())], spacing:14) } with 16 pt horizontal padding. Tile = VStack(alignment:.leading){ square artwork radius 6, title subheadline semibold lineLimit(1), artist footnote secondary lineLimit(1) }.",
+   "data": "Album sorted by title (assumption). Group compilations by album artist (spec §5).",
+   "states": "populated; empty.",
+   "actions": "Tile tap → Album details.",
+   "notes": "Exactly 2 columns at 320 pt: tile width = (320 − 2×16 − 12) / 2 = 138 pt."
+  },
+  {
+   "id": "05-album-details",
+   "title": "Screen 5 — Album details",
+   "swiftUI": "List(.plain): header (artwork 148 pt centered, title, artist in accent color, “Genre · Year”, “N songs · M min”), Play/Shuffle row, then numbered ForEach(tracks). Number column 22 pt secondary; prototype shows duration under the title — a trailing duration is also fine.",
+   "data": "Album → tracks sorted by discNumber then trackNumber (spec §5). Artist link → Artist details.",
+   "states": "populated; unavailable tracks dimmed.",
+   "actions": "Row tap → play album queue from that track. Artist name → Artist details.",
+   "notes": "Artwork 148 pt chosen for the 568 pt height; do not scale to full width."
+  },
+  {
+   "id": "06-artists",
+   "title": "Screen 6 — Artists",
+   "swiftUI": "List(.plain) rows: circular 40 pt artwork (first album’s cover — NO online photos), name (body), “N Albums, M Songs” (footnote secondary), chevron. Optional alphabetical section index.",
+   "data": "Artist with album/track counts; use album artist where available.",
+   "states": "populated; empty.",
+   "actions": "Row tap → Artist details (albums + songs; not one of the 15 required screens).",
+   "notes": "Fallback artwork when none embedded: neutral SF Symbol on a fill background."
+  },
+  {
+   "id": "07-folders",
+   "title": "Screen 7 — Folder browser (registered sources) with context menu",
+   "swiftUI": "List of registered MusicSource rows (folder.fill, name, “N songs”). Row .contextMenu { Button(\"Rescan Folder\"); Button(role:.destructive){ \"Remove from Library\" } } with a confirmation alert. Nav bar trailing Button(systemImage:\"folder.badge.plus\") = Add Folder.",
+   "data": "MusicSource list. Subfolder hierarchy is derived from each Track’s path relative to its source (assumption: store relativePath on Track; the spec does not list it).",
+   "states": "populated; source unavailable / needs reconnect (see S1, S2).",
+   "actions": "Row tap → folder contents (07b). Add Folder → document picker. Remove → alert → removes index/source only, never files (spec §4).",
+   "notes": "Long-press in the prototype; native contextMenu in SwiftUI."
+  },
+  {
+   "id": "07b-folder-contents",
+   "title": "Screen 7 — Folder contents → play",
+   "swiftUI": "Same List; subfolders as NavigationLinks, then Play/Shuffle and track rows for files directly in this folder.",
+   "data": "Tracks where source == X and relativePath has the folder prefix. The prototype maps albums to folders for demo only.",
+   "states": "populated; empty folder.",
+   "actions": "Track row → play, queue = tracks in this folder in listed order.",
+   "notes": "Back label shows the parent folder name."
+  },
+  {
+   "id": "08-now-playing",
+   "title": "Screen 8 — Now Playing",
+   "swiftUI": "Present with .fullScreenCover (full height is needed at 568 pt; an iOS 15 .sheet is card-style). VStack: header (dismiss chevron.down, “NOW PLAYING” caption2 + context name footnote semibold, ellipsis Menu); artwork region fills remaining height, square, max 240 pt (shrink to 88% when paused); title + artist; favorite button; seek bar; elapsed/remaining labels; transport row (backward.fill, play/pause 46 pt, forward.fill); secondary row (shuffle, repeat/repeat.1, quote.bubble, list.bullet).",
+   "data": "PlaybackCoordinator (single instance): currentTrack, elapsed, duration, isPlaying, shuffle, repeat (off/all/one), queue. Views observe; they never own an engine.",
+   "states": "playing; paused (artwork scaled 0.88, shown here); no lyrics (button still present); unavailable-track error (S3).",
+   "actions": "Lyrics button → lyrics mode (09). Queue button → Up Next (08b). Dismiss → previous screen. Seek drag → coordinator.seek.",
+   "notes": "All controls fit in 320×568 without clipping. No volume slider (hardware buttons). Drive elapsed time from the engine’s time observer; keep timers off while paused."
+  },
+  {
+   "id": "08L-now-playing-light",
+   "title": "Screen 8 — Now Playing (light appearance)",
+   "swiftUI": "Same view; semantic colors only.",
+   "data": "—",
+   "states": "light",
+   "actions": "—",
+   "notes": "Required deliverable."
+  },
+  {
+   "id": "08b-queue",
+   "title": "Screen 8 — Up Next (queue mode)",
+   "swiftUI": "Replaces the artwork region with a compact header (artwork 44 pt, title, artist) and a List of upcoming tracks; transport controls stay. Add .onMove/.onDelete only if queue editing is implemented (spec requires play-next/add-to-queue; reorder UI is not specified).",
+   "data": "Queue order after the current item, wrapping per repeat mode.",
+   "states": "populated; empty (“Nothing queued”).",
+   "actions": "Row tap → jump to that item.",
+   "notes": "Gap: queue reorder/remove UI is not designed."
+  },
+  {
+   "id": "09-lyrics-synced",
+   "title": "Screen 9 — Synchronized lyrics",
+   "swiftUI": "ScrollViewReader + ScrollView { LazyVStack } of lines; current line primary color, others ≈32% opacity; scrollTo(currentIndex, anchor: UnitPoint(x:0.5,y:0.32)); tap line → coordinator.seek(to: line.time). Manual scroll should pause auto-follow briefly. Controls below are the same as Now Playing.",
+   "data": "LyricsService returns [LyricLine(time: TimeInterval?, text)] from embedded tags or an adjacent .lrc (spec §8). The current line is derived from audio playback time, including seeks and pauses.",
+   "states": "synced (this frame); plain (09b); unavailable (09c).",
+   "actions": "Tap line → seek. ✕ or compact header → back to artwork mode.",
+   "notes": "Lyric text here is invented placeholder text. Restrained animation only."
+  },
+  {
+   "id": "09b-lyrics-plain",
+   "title": "Screen 9 — Plain (unsynchronized) lyrics",
+   "swiftUI": "Same scroll container; all lines primary color, no highlight, no tap-to-seek affordance. NEVER synthesize timestamps for plain lyrics (spec §8).",
+   "data": "Embedded plain lyrics string split on newlines.",
+   "states": "plain",
+   "actions": "None on lines.",
+   "notes": "Rendered by post-processing the synced frame."
+  },
+  {
+   "id": "09c-lyrics-empty",
+   "title": "Screen 9 — Lyrics unavailable",
+   "swiftUI": "ContentUnavailableView does not exist on iOS 15; use a centered VStack (Image quote.bubble, headline, subheadline secondary).",
+   "data": "No embedded lyrics and no matching .lrc.",
+   "states": "empty",
+   "actions": "—",
+   "notes": "Adjust copy if plain lyrics are also absent."
+  },
+  {
+   "id": "10-playlists",
+   "title": "Screen 10 — Playlists",
+   "swiftUI": "List(.plain): first row “New Playlist…” (plus, accent), Favorites, user playlists, a section for imported M3U/M3U8. Row: 2×2 artwork collage or placeholder 48 pt, name, “N songs”. Nav trailing + Button also creates a playlist.",
+   "data": "Playlist (kind: favorites | user | imported). Imported playlists behave identically at playback time; the source file extension is a secondary hint (assumption).",
+   "states": "populated; empty (only “New Playlist…”); imported playlist with unresolved entries.",
+   "actions": "Row → Playlist details. New Playlist → name prompt (S5).",
+   "notes": "Collage: first 4 distinct album covers; repeat if fewer."
+  },
+  {
+   "id": "11-playlist-details",
+   "title": "Screen 11 — Playlist details",
+   "swiftUI": "Header (collage 148 pt, name, “N songs · M min”), Play/Shuffle, ForEach rows with .swipeActions(edge:.trailing){ Play Next; Remove } and .contextMenu. Nav trailing EditButton() toggling EditMode for .onDelete / .onMove.",
+   "data": "PlaylistEntry ordered; entries reference stable Track identities; duplicates preserved; missing tracks stay visible as unavailable (spec §9).",
+   "states": "populated; editing (11b); empty; entries unavailable.",
+   "actions": "Row tap → play playlist queue from that entry. Remove deletes the entry only, never audio files.",
+   "notes": "Swipe actions are not visible in a static frame; they exist in the interactive prototype."
+  },
+  {
+   "id": "11b-playlist-edit",
+   "title": "Screen 11 — Editing / reorder",
+   "swiftUI": "Standard List edit mode: red delete control at left, reorder handle at right (system-provided via .onMove / .onDelete; do not hand-draw).",
+   "data": "Reordering rewrites PlaylistEntry order in a single batch.",
+   "states": "editing",
+   "actions": "Done exits edit mode.",
+   "notes": "Handles drawn here approximate the native control."
+  },
+  {
+   "id": "12-search-empty",
+   "title": "Screen 12 — Search (before typing)",
+   "swiftUI": ".searchable(text:placement:.navigationBarDrawer(displayMode:.always)) on a NavigationView root. Empty state VStack as drawn. No suggestions, trending or recommendations.",
+   "data": "Local only.",
+   "states": "empty (this frame), results, no results.",
+   "actions": "Typing filters locally.",
+   "notes": "The field is drawn inside the scroll view to match the prototype; native .searchable places it under the large title."
+  },
+  {
+   "id": "12b-search-results",
+   "title": "Screen 12 — Categorized results",
+   "swiftUI": "List with a Section per category (Songs, Albums, Artists, Playlists). Debounce input ≈ 150–250 ms (assumption). Use normalized fields for case/diacritic-insensitive matching.",
+   "data": "NSFetchRequest per entity (title/artist/album/name CONTAINS[cd]); must stay responsive at several thousand tracks (spec §5).",
+   "states": "results; no results.",
+   "actions": "Song row → play (queue = visible song results). Album/Artist/Playlist rows push details.",
+   "notes": "Prototype caps song results at 6; real UI should paginate or offer “See All”."
+  },
+  {
+   "id": "13-settings",
+   "title": "Screen 13 — Settings",
+   "swiftUI": "List(.insetGrouped) with sections MUSIC LIBRARY / PLAYBACK / STORAGE / ABOUT. Toggle for Resume Playback. Destructive text row for Clear Artwork Cache with a confirmation alert.",
+   "data": "UserDefaults for toggles; ArtworkCache size from disk; version from Bundle.main.",
+   "states": "default.",
+   "actions": "Music Folders → 14. Rescan Library → scan sheet (15). Library Statistics, Playback Preferences, Supported Audio Formats push simple lists.",
+   "notes": "Spec §7 requires restoring last queue/position WITHOUT auto-playing; define “Resume Playback” as “restore last queue” (assumption). No account/cloud/networking rows."
+  },
+  {
+   "id": "14-music-folders",
+   "title": "Screen 14 — Manage music folders",
+   "swiftUI": "List(.insetGrouped) of sources (folder.fill, name, “N songs” or status), “Add Folder…” and “Rescan All” rows, EditButton for delete controls. Each row also has a contextMenu: Rescan, Remove from Library.",
+   "data": "MusicSource: displayName, bookmark data, status (ok | needsReconnect | unavailable), trackCount.",
+   "states": "populated; editing; one source unavailable (“Old iPod Backup” shown). The app-owned Documents/Music source should also appear as a row.",
+   "actions": "Add Folder → UIDocumentPickerViewController (system UI). Remove → alert → removes from library only.",
+   "notes": "The picker sheet in the interactive prototype only mocks the system document picker."
+  },
+  {
+   "id": "15-scanning",
+   "title": "Screen 15 — Scanning progress",
+   "swiftUI": ".sheet with a simple view: “Scanning Music”, current path (truncate head/middle, caption), ProgressView(value:), two counters (“Files discovered”, “Songs indexed”), Cancel button. Drive from LibraryScanner progress (AsyncStream / @Published); Cancel cancels the Task.",
+   "data": "ScanProgress{ currentPath, filesDiscovered, tracksIndexed, fraction? }. Use an indeterminate ProgressView if the total is unknown.",
+   "states": "running; cancelled; finished; finished with errors (S4).",
+   "actions": "Cancel → stops the scan; keep already-indexed results (assumption).",
+   "notes": "Numbers/path are placeholders. “.flac” is sample text only; FLAC support is unverified (spec §6)."
+  },
+  {
+   "id": "S1-row-states",
+   "title": "State variants — track rows (available, playing, unavailable, unsupported)",
+   "swiftUI": "Row view takes a TrackAvailability enum { available, unavailable(reason), unsupportedFormat }. Unavailable/unsupported rows are dimmed (≈0.4 opacity on artwork/title) with a secondary-colored reason; they stay in playlists and favorites (spec §4.7, §9). Tapping shows an alert (S3) instead of playing.",
+   "data": "Track.availability stored in Core Data; set by the scanner when file/bookmark access fails; re-evaluated on rescan.",
+   "states": "available · currently playing · unavailable (reconnect needed) · unsupported format",
+   "actions": "Tap on unavailable/unsupported → alert S3 or S2.",
+   "notes": "Reason copy is a suggestion."
+  },
+  {
+   "id": "S2-reconnect",
+   "title": "State variants — source needs reconnect",
+   "swiftUI": "The source row shows a warning status; tapping presents this alert. “Choose Folder” re-opens UIDocumentPickerViewController (directoryURL hint = last known URL) and replaces the stale bookmark. Do not remove the source or its playlists/favorites automatically.",
+   "data": "MusicSource.status = needsReconnect when bookmark resolution is stale/denied.",
+   "states": "needs reconnect",
+   "actions": "Choose Folder → picker → rebind bookmark → rescan that source.",
+   "notes": "Alert copy is a suggestion."
+  },
+  {
+   "id": "S3-unsupported",
+   "title": "State variants — unsupported / unplayable file alert",
+   "swiftUI": "Alert(title: \"Can’t Play “<title>”\", message: \"This file’s format isn’t supported on this device.\", OK). On repeated decoder failure advance per queue policy (spec §7: unavailable files and decoder errors).",
+   "data": "Decoder failure from AudioEngine → PlaybackCoordinator error state.",
+   "states": "error",
+   "actions": "OK dismisses; coordinator skips or stops per rules.",
+   "notes": "Which formats actually fail is unverified; see CODEC_SUPPORT.md (to be produced)."
+  },
+  {
+   "id": "S4-scan-finished",
+   "title": "State variants — scan finished with skipped files",
+   "swiftUI": "Final state of the scan sheet when some files could not be read: counts for added and skipped, a “View Skipped Files” row (List of path + reason), Done button.",
+   "data": "ScanResult{ added, updated, skipped:[{path, reason}] }.",
+   "states": "finished-with-errors",
+   "actions": "Done dismisses; View Skipped Files pushes a list.",
+   "notes": "Counts are placeholders."
+  },
+  {
+   "id": "S5-new-playlist",
+   "title": "State variants — New Playlist name prompt",
+   "swiftUI": "iOS 15 SwiftUI alerts cannot host a TextField (added in iOS 16). Use a UIAlertController bridge, or a small .sheet with a TextField and Cancel/Save.",
+   "data": "Creates Playlist(kind: user, name) — empty until songs are added.",
+   "states": "input",
+   "actions": "Save → opens the new (empty) playlist details.",
+   "notes": "Visual is the native UIAlertController look."
+  }
+ ]
+}

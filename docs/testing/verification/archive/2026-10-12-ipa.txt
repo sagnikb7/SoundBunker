@@ -1,0 +1,10 @@
+Release iphoneos build: BUILD SUCCEEDED
+IPA: dist/OfflineMusicPlayer-unsigned.ipa
+Archive integrity: PASS
+Bundle identifier: com.local.offlinemusicplayer
+Architecture: arm64
+Platform: IOS
+Minimum OS: 15.0
+SDK: 27.0
+Signing/provisioning: pending Sideloadly; no install claimed
+SHA-256: e4494c5b3ef7aa4a53c14966ee9e40f570ae68f83a048d86cab0ae8f3c447b79
