@@ -112,3 +112,13 @@ func waitForScan(_ library: LibraryStore) async throws {
     }
     XCTFail("Scan did not finish within 10 seconds"); library.cancelScan()
 }
+
+@MainActor
+func waitForPlayback(_ player: PlaybackCoordinator) async throws {
+    for _ in 0..<100 {
+        if player.isPlaying { return }
+        if player.errorMessage != nil { XCTFail(player.errorMessage ?? "Playback failed"); return }
+        try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    XCTFail("Playback did not start within two seconds")
+}

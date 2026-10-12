@@ -23,7 +23,7 @@ The generated IPA is unsigned. [Sideloadly](https://sideloadly.io/) can sign/pro
 
 1. Install Sideloadly from its official website.
 2. Keep the iPod unlocked, connected and trusted by Finder.
-3. Unzip `SoundBunker-unsigned.ipa.zip` on the Mac, then choose `SoundBunker-unsigned.ipa` in Sideloadly.
+3. Unzip `SoundBunker-unsigned-<version>.ipa.zip` on the Mac, then choose `SoundBunker-unsigned-<version>.ipa` in Sideloadly.
 4. Select the iPod as destination, enter the Apple Account, and start. Enter passwords and two-factor codes yourself; never save them in this repository or chat.
 5. Trust the developer profile on the iPod if prompted, then open SoundBunker. Free signing needs renewal after seven days. Keep the same account/bundle identifier when renewing to preserve app data. [Sideloadly FAQ](https://sideloadly.io/faq.html)
 

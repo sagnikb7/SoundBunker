@@ -5,7 +5,7 @@
 When the user says **"create build"**, **"build"** in a delivery context, or asks to create an IPA:
 
 1. Build the current Release **iphoneos arm64** app, retaining iOS 15.0 minimum deployment.
-2. Use `scripts/create_build.sh` to produce **both** `dist/SoundBunker-unsigned.ipa` and `dist/SoundBunker-unsigned.ipa.zip` (ZIP contains the IPA).
+2. Use `scripts/create_build.sh` to produce **both** `dist/SoundBunker-unsigned-<version>.ipa` and `dist/SoundBunker-unsigned-<version>.ipa.zip` (ZIP contains the IPA).
 3. Verify both archives, device architecture, minimum OS and bundled resources. Do not ship test media.
 4. Return links to both artifacts. Explain that an unsigned IPA needs signing/provisioning before installation; never claim transfer or installation without evidence.
 
@@ -32,6 +32,8 @@ Record every shipped feature/fix in `release/version.json` pending notes before 
 - Visual reference mapping: [docs/design/prototype-mapping.md](docs/design/prototype-mapping.md).
 - Native UI verification: [docs/design/native-ui-qa.md](docs/design/native-ui-qa.md).
 - Test commands, results and physical QA: [docs/testing/testing.md](docs/testing/testing.md).
+- Metadata, M3U and directory policy: [docs/engineering/metadata-and-playlists.md](docs/engineering/metadata-and-playlists.md).
+- Feature expansion verification: [docs/testing/verification/feature-expansion-qa.md](docs/testing/verification/feature-expansion-qa.md).
 - Actual codec evidence: [docs/testing/codec-support.md](docs/testing/codec-support.md).
 - Final build receipt: [docs/testing/verification/final-build.md](docs/testing/verification/final-build.md).
 - Executed test receipts: `docs/testing/verification/final-tests.txt`; historical receipts: `docs/testing/verification/archive/`.

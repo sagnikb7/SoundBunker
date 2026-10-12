@@ -2,7 +2,7 @@
 
 [SoundBunker QA](https://github.com/sagnikb7/SoundBunker/actions/workflows/ci.yml) runs on pushes to main, pull requests and manual dispatch. It uses the GitHub-hosted macos-15 image and logs its installed Xcode version. Hosted toolchains can differ from the local Xcode 27 environment.
 
-The workflow runs Python release tests, read-only release/Markdown link checks, deterministic project regeneration, native Catalyst XCTest, and an unsigned Release iphoneos build plus static analysis. Packaging validates arm64, minimum iOS 15, bundle identity/version, bundled release notes/icon, absence of test media and IPA/ZIP integrity. Test reports are retained for seven days; IPA/ZIP/checksums for fourteen days.
+The workflow runs Python release tests, read-only release/Markdown link checks, deterministic project regeneration, native Release Catalyst XCTest with testability enabled and hardened runtime disabled only for the ad-hoc desktop test invocation, and an unsigned Release iphoneos build plus static analysis. Packaging validates arm64, minimum iOS 15, bundle identity/version, bundled release notes/icon, absence of test media and IPA/ZIP integrity. Test reports are retained for seven days; versioned IPA/ZIP/checksums for fourteen days. Both package filenames include the built app version.
 
 CI builds the version already recorded in the commit. It does not bump versions, modify the changelog, push commits, publish GitHub releases or install on devices. Use the local release script to finalize a new version before committing. Download unsigned packages from a successful run's Artifacts section and sign before installation.
 

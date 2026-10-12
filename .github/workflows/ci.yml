@@ -34,10 +34,10 @@ jobs:
       - name: Native Catalyst regression tests
         run: |
           xcodebuild -project OfflineMusicPlayer.xcodeproj -scheme OfflineMusicPlayer \
-            -destination 'platform=macOS,variant=Mac Catalyst' \
+            -configuration Release -destination 'platform=macOS,variant=Mac Catalyst' \
             -derivedDataPath "$RUNNER_TEMP/Catalyst" \
             -resultBundlePath "$RUNNER_TEMP/NativeTests.xcresult" \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual test
+            ENABLE_TESTABILITY=YES ENABLE_HARDENED_RUNTIME=NO CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual test
       - name: Unsigned device build and static analysis
         run: |
           xcodebuild -project OfflineMusicPlayer.xcodeproj -scheme OfflineMusicPlayer \
@@ -46,9 +46,11 @@ jobs:
       - name: Package and validate IPA plus ZIP
         run: |
           TASK_APP="$RUNNER_TEMP/Device/Build/Products/Release-iphoneos/OfflineMusicPlayer.app"
-          python3 scripts/package_ipa.py "$TASK_APP" dist/SoundBunker-unsigned.ipa
-          python3 scripts/verify_repository.py --app "$TASK_APP" --ipa dist/SoundBunker-unsigned.ipa
-          shasum -a 256 dist/SoundBunker-unsigned.ipa dist/SoundBunker-unsigned.ipa.zip > dist/SHA256SUMS
+          TASK_VERSION=$(python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["CFBundleShortVersionString"])' "$TASK_APP/Info.plist")
+          TASK_IPA="dist/SoundBunker-unsigned-$TASK_VERSION.ipa"
+          python3 scripts/package_ipa.py "$TASK_APP" "$TASK_IPA"
+          python3 scripts/verify_repository.py --app "$TASK_APP" --ipa "$TASK_IPA"
+          shasum -a 256 "$TASK_IPA" "$TASK_IPA.zip" > dist/SHA256SUMS
       - name: Test results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -62,8 +64,8 @@ jobs:
         with:
           name: SoundBunker-unsigned-${{ github.sha }}
           path: |
-            dist/SoundBunker-unsigned.ipa
-            dist/SoundBunker-unsigned.ipa.zip
+            dist/SoundBunker-unsigned-*.ipa
+            dist/SoundBunker-unsigned-*.ipa.zip
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14

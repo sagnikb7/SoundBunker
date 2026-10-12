@@ -6,6 +6,7 @@ struct ScanResult {
     var seen: Set<String>
     var skipped: Int
     var issues: [String]
+    var playlists: [ScannedPlaylist] = []
 }
 
 enum LocalFilePolicy {
@@ -22,19 +23,17 @@ enum LocalFilePolicy {
 
     static func check(_ url: URL) throws {
         guard url.isFileURL else { throw CocoaError(.fileReadUnsupportedScheme) }
-        let values = try url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .isSymbolicLinkKey])
+        let values = try url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .isSymbolicLinkKey, .isDirectoryKey])
         guard values.isSymbolicLink != true else { throw CocoaError(.fileReadNoPermission) }
-        if values.isUbiquitousItem == true && values.ubiquitousItemDownloadingStatus != .current && values.ubiquitousItemDownloadingStatus != .downloaded {
+        if values.isDirectory != true && values.isUbiquitousItem == true && values.ubiquitousItemDownloadingStatus != .current && values.ubiquitousItemDownloadingStatus != .downloaded {
             throw NSError(domain: "PocketMusic", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cloud-only file skipped. Download it in Files before adding it."])
         }
-        // Do not ask external File Provider extensions to materialize files.
-        if url.path.contains("File Provider Storage") || url.path.contains("FileProviderStorage") {
-            throw NSError(domain: "PocketMusic", code: 2, userInfo: [NSLocalizedDescriptionKey: "Provider storage cannot be verified offline. Move these files to On My iPod → SoundBunker first."])
-        }
+
     }
 }
 
 actor LibraryScanner {
+    private var manifestCache: [String: (fingerprint: String, result: M3UParseResult)] = [:]
     static let extensions: Set<String> = ["mp3", "m4a", "aac", "alac", "wav", "aiff", "aif", "flac", "ogg", "opus"]
     func scan(root: URL, sourceID: UUID, existing: [String: Track], cache: URL, excluded: [String] = [],
               progress: @escaping @Sendable ([Track], Int) async -> Void) async throws -> ScanResult {
@@ -47,6 +46,7 @@ actor LibraryScanner {
             options: [.skipsHiddenFiles, .skipsPackageDescendants], errorHandler: { url, error in
                 issues.append("\(url.lastPathComponent): \(error.localizedDescription)"); return true
             }) else { throw CocoaError(.fileReadUnknown) }
+        var playlists: [ScannedPlaylist] = []
         var tracks: [Track] = [], batch: [Track] = [], seen = Set<String>(), skipped = 0, count = 0
         while let file = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
@@ -55,7 +55,24 @@ actor LibraryScanner {
                 if excluded.contains(where: { relativePath == $0 || relativePath.hasPrefix($0 + "/") }) { enumerator.skipDescendants(); continue }
                 let attributes = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey, .volumeIdentifierKey, .fileSizeKey, .contentModificationDateKey])
                 if attributes.isSymbolicLink == true { enumerator.skipDescendants(); continue }
-                guard attributes.isRegularFile == true, Self.extensions.contains(file.pathExtension.lowercased()) else { continue }
+                guard attributes.isRegularFile == true else { continue }
+                if ["m3u", "m3u8"].contains(file.pathExtension.lowercased()) {
+                    try LocalFilePolicy.check(file)
+                    guard (attributes.fileSize ?? 0) <= 2_000_000 else { throw CocoaError(.fileReadTooLarge) }
+                    let fingerprint = "\(attributes.fileSize ?? 0):\(attributes.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+                    let key = scanRoot.path + ":" + relativePath
+                    let parsed: M3UParseResult
+                    if let cached = manifestCache[key], cached.fingerprint == fingerprint { parsed = cached.result }
+                    else {
+                        parsed = try M3UParser.parse(Data(contentsOf: file), playlist: file, root: scanRoot)
+                        if manifestCache.count > 500 { manifestCache.removeAll(keepingCapacity: true) }
+                        manifestCache[key] = (fingerprint, parsed)
+                    }
+                    playlists.append(ScannedPlaylist(path: relativePath, name: file.deletingPathExtension().lastPathComponent, entries: parsed.entries))
+                    issues.append(contentsOf: parsed.issues.prefix(max(0, 20 - issues.count)))
+                    continue
+                }
+                guard Self.extensions.contains(file.pathExtension.lowercased()) else { continue }
                 count += 1
                 try LocalFilePolicy.check(file)
                 let relative = String(file.resolvingSymlinksInPath().path.dropFirst(scanRoot.path.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -63,7 +80,11 @@ actor LibraryScanner {
                 if let fid = attributes.fileResourceIdentifier, let volume = attributes.volumeIdentifier {
                     identity = "\(volume):\(fid)"
                 } else { identity = file.standardizedFileURL.path }
-                let fingerprint = "\(attributes.fileSize ?? 0):\(attributes.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+                var fingerprint = "\(attributes.fileSize ?? 0):\(attributes.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+                let sidecar = file.deletingPathExtension().appendingPathExtension("lrc")
+                if let lyricAttributes = try? sidecar.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) {
+                    fingerprint += ":lrc:\(lyricAttributes.fileSize ?? 0):\(lyricAttributes.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+                }
                 var track: Track
                 if let previous = existing[identity], previous.fingerprint == fingerprint { track = previous }
                 else {
@@ -80,7 +101,7 @@ actor LibraryScanner {
             catch { skipped += 1; if issues.count < 20 { issues.append("\(file.lastPathComponent): \(error.localizedDescription)") } }
         }
         if !batch.isEmpty { await progress(batch, count) }
-        return ScanResult(tracks: tracks, seen: seen, skipped: skipped, issues: issues)
+        return ScanResult(tracks: tracks, seen: seen, skipped: skipped, issues: issues, playlists: playlists)
     }
 
     private func metadata(_ url: URL, id: String, fingerprint: String, cache: URL) async throws -> Track {
@@ -119,8 +140,7 @@ actor LibraryScanner {
         }
         var lyrics = tag(["USLT", "lyrics"])
         let lrc = url.deletingPathExtension().appendingPathExtension("lrc")
-        if FileManager.default.fileExists(atPath: lrc.path) {
-            try LocalFilePolicy.check(lrc)
+        if FileManager.default.fileExists(atPath: lrc.path), (try? LocalFilePolicy.check(lrc)) != nil {
             let size = try lrc.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             if size < 1_000_000 { lyrics = try? String(contentsOf: lrc, encoding: .utf8) }
         }

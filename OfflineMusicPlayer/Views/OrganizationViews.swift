@@ -10,8 +10,8 @@ struct SearchView: View {
             else {
                 List {
                     Section("Songs") { ForEach(songs) { track in SongRow(track: track) { playback.play(songs, startingAt: track) } } }
-                    Section("Albums") { ForEach(AlbumGroup.make(library.visibleTracks).filter { matches($0.title) || matches($0.artist) }) { album in NavigationLink(album.title) { AlbumDetailView(album: album) } } }
-                    Section("Artists") { ForEach(Set(library.visibleTracks.map(\.artist)).sorted().filter(matches), id: \.self) { artist in NavigationLink(artist) { SongListView(title: artist, tracks: library.sortedTracks.filter { $0.artist == artist }) } } }
+                    Section("Albums") { ForEach(library.browse.albums.filter { matches($0.title) || matches($0.artist) }) { album in NavigationLink(album.title) { AlbumDetailView(album: album) } } }
+                    Section("Artists") { ForEach(library.browse.artistNames.filter(matches), id: \.self) { artist in NavigationLink(artist) { SongListView(title: artist, tracks: library.browse.artists[artist] ?? []) } } }
                     Section("Playlists") { ForEach(library.playlists.filter { matches($0.name) }) { playlist in NavigationLink(playlist.name) { PlaylistDetailView(id: playlist.id) } } }
                     if songs.isEmpty { Text("No matching songs").foregroundColor(.secondary) }
                 }.listStyle(.plain)
@@ -45,7 +45,7 @@ struct NameSheet: View {
     var save: (String) -> Void
     var body: some View {
         NavigationView {
-            Form { TextField("Playlist name", text: $value) }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+            Form { TextField("Playlist name", text: $value) }.background(BackGestureSupport(rootBack: { dismiss() })).navigationTitle(title).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Save") { save(value); dismiss() }.disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -69,6 +69,10 @@ struct PlaylistDetailView: View {
                     else { Label("Unavailable song", systemImage: "exclamationmark.triangle").foregroundColor(.secondary) }
                 }.onDelete { indices in var changed = playlist; changed.trackIDs.remove(atOffsets: indices); library.changePlaylist(changed) }
                     .onMove { from, to in var changed = playlist; changed.trackIDs.move(fromOffsets: from, toOffset: to); library.changePlaylist(changed) }
+                if let missing = playlist.unresolvedPaths, !missing.isEmpty {
+                    Section("Unresolved Playlist Entries") { ForEach(Array(missing.enumerated()), id: \.offset) { entry in Text(entry.element).font(.footnote).foregroundColor(.secondary) } }
+                }
+                if playlist.importedSourceID != nil { Text("Imported from M3U. Rescanning its folder updates this list from the file.").font(.footnote).foregroundColor(.secondary) }
                 Button("Add Songs") { adding = true }
                 Button("Rename Playlist") { renaming = true }
             }
@@ -173,7 +177,7 @@ struct AddToPlaylistView: View {
                     }
                     Button("New Playlist…") { creating = true }
                 }
-            }.navigationTitle("Add to Playlist").navigationBarTitleDisplayMode(.inline)
+            }.background(BackGestureSupport(rootBack: { dismiss() })).navigationTitle("Add to Playlist").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .sheet(isPresented: $creating) {
                     NameSheet(title: "New Playlist", value: "") { name in

@@ -7,8 +7,16 @@ import UIKit
 final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var currentTrack: Track?
     @Published private(set) var isPlaying = false
+    @Published private(set) var playbackRequested = false
+    private var playbackGeneration = 0
+    private var lyricsTracking = false
+    private var playerVisible = false
     @Published private(set) var duration: TimeInterval = 0
-    @Published private(set) var position: TimeInterval = 0
+    let clock = PlaybackClock()
+    var position: TimeInterval {
+        get { clock.position }
+        set { clock.position = newValue }
+    }
     @Published private(set) var queue: [String] = []
     @Published private(set) var queueIndex = 0
     @Published private(set) var shuffle = false
@@ -88,6 +96,11 @@ final class PlaybackCoordinator: ObservableObject {
         if position > 3 { seek(to: 0); return }
         if queueIndex > 0 { queueIndex -= 1; loadCurrent(autoplay: true) } else { seek(to: 0) }
     }
+    func previousTrack() {
+        if queueIndex > 0 { queueIndex -= 1; loadCurrent(autoplay: true) }
+        else if repeatMode == .all && !queue.isEmpty { queueIndex = queue.count - 1; loadCurrent(autoplay: true) }
+        else { seek(to: 0) }
+    }
     private func advance(natural: Bool) {
         if natural && repeatMode == .one { seek(to: 0); play(); return }
         if queueIndex + 1 < queue.count { queueIndex += 1; loadCurrent(autoplay: true) }
@@ -95,6 +108,7 @@ final class PlaybackCoordinator: ObservableObject {
         else { pause(); position = duration; persist(); updateNowPlaying() }
     }
     private func loadCurrent(autoplay: Bool) {
+        playbackGeneration += 1; playbackRequested = false
         engine.stop(); stopTimer(); releaseAccess(); isPlaying = false; position = 0
         guard let library = library else { return }
         // Skip unavailable entries with a bounded traversal. Never silently replace a track by title.
@@ -138,22 +152,48 @@ final class PlaybackCoordinator: ObservableObject {
             if currentTrack != nil { pause(); errorMessage = "This song is unavailable or its folder is excluded." }
             return
         }
-        do {
-            // Restored sessions have no loaded engine and never autoplay on launch.
-            if engine.duration == 0 { let resume = position; try prepare(track); engine.seek(to: resume); duration = engine.duration; loadArtwork(track) }
-            try AVAudioSession.sharedInstance().setActive(true)
-            if position >= duration { engine.seek(to: 0) }
-            try engine.play(); isPlaying = engine.isPlaying; position = engine.currentTime
-            startTimer(); updateNowPlaying()
-        } catch { isPlaying = false; stopTimer(); errorMessage = error.localizedDescription; updateNowPlaying() }
+        playbackGeneration += 1
+        let generation = playbackGeneration
+        playbackRequested = true
+        Task {
+            do {
+                guard generation == playbackGeneration, playbackRequested else { return }
+                try await PlaybackSession.shared.activate(true)
+                guard generation == playbackGeneration, playbackRequested else { return }
+                if engine.duration == 0 { let resume = position; try prepare(track); engine.seek(to: resume); duration = engine.duration; loadArtwork(track) }
+                if position >= duration { engine.seek(to: 0) }
+                try engine.play(); isPlaying = engine.isPlaying; playbackRequested = isPlaying; position = engine.currentTime
+                startTimer(); updateNowPlaying()
+            } catch {
+                guard generation == playbackGeneration else { return }
+                isPlaying = false; playbackRequested = false; stopTimer(); errorMessage = error.localizedDescription; updateNowPlaying()
+            }
+        }
     }
     func pause() {
-        engine.pause(); isPlaying = false
+        playbackGeneration += 1; playbackRequested = false; isPlaying = false
+        engine.pause()
         if engine.duration > 0 { position = engine.currentTime }
-        stopTimer(); updateNowPlaying(); persist()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        stopTimer(); updateNowPlaying()
+        Task {
+            try? await PlaybackSession.shared.activate(false)
+            persist()
+        }
     }
-    func toggle() { isPlaying ? pause() : play() }
+    func toggle() { playbackRequested || isPlaying ? pause() : play() }
+    func setPlayerVisible(_ visible: Bool) {
+        guard visible != playerVisible else { return }
+        playerVisible = visible
+        if !visible { lyricsTracking = false }
+        if engine.duration > 0 { position = engine.currentTime }
+        if isPlaying { startTimer() }
+    }
+    func setLyricsTracking(_ enabled: Bool) {
+        guard enabled != lyricsTracking else { return }
+        lyricsTracking = enabled
+        if enabled && engine.duration > 0 { position = engine.currentTime }
+        if isPlaying { startTimer() }
+    }
     func seek(to time: TimeInterval) {
         guard time.isFinite else { return }
         if engine.duration > 0 { engine.seek(to: time); position = engine.currentTime }
@@ -163,15 +203,15 @@ final class PlaybackCoordinator: ObservableObject {
     func persist() {
         guard let db = library?.database else { return }
         do {
-            try db.save(PlaybackSnapshot(queue: queue, index: queueIndex, position: position, repeatMode: repeatMode, shuffle: shuffle), key: "playback", kind: "playback")
+            try db.save(PlaybackSnapshot(queue: queue, index: queueIndex, position: isPlaying && engine.duration > 0 ? engine.currentTime : position, repeatMode: repeatMode, shuffle: shuffle), key: "playback", kind: "playback")
             try db.commit(); lastSaved = Date()
         } catch { errorMessage = "Couldn't save playback state: \(error.localizedDescription)" }
     }
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: playerVisible ? (lyricsTracking ? 0.2 : 0.5) : 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
+                guard let self = self, self.isPlaying else { return }
                 self.position = self.engine.currentTime
                 if Date().timeIntervalSince(self.lastSaved) > 10 { self.persist() }
             }

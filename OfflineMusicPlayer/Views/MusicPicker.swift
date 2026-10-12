@@ -6,7 +6,7 @@ struct MusicPicker: UIViewControllerRepresentable {
     var selected: ([URL]) -> Void
     var cancelled: () -> Void
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let types: [UTType] = folders ? [.folder] : [.audio, .mp3, .mpeg4Audio, .wav, .aiff]
+        let types: [UTType] = folders ? [.folder] : [.audio, .mp3, .mpeg4Audio, .wav, .aiff, UTType(filenameExtension: "m3u") ?? .plainText, UTType(filenameExtension: "m3u8") ?? .plainText]
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: false)
         picker.allowsMultipleSelection = !folders; picker.delegate = context.coordinator
         return picker

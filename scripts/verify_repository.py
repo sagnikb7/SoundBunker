@@ -26,6 +26,10 @@ def verify(root, app=None, ipa=None):
     assert info['CFBundleShortVersionString'] == expected, 'Prepare the release before committing'
     expected_build = manifest['build'] + 1 if pending else manifest['build']
     assert info['CFBundleVersion'] == str(expected_build), 'Build number mismatch'
+    project_metadata = root / 'OfflineMusicPlayer/Resources/Project.json'
+    if project_metadata.exists():
+        url = json.loads(project_metadata.read_text())['githubURL']
+        assert re.fullmatch(r'https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', url), 'Unsafe project link'
     notes = json.loads((root / 'OfflineMusicPlayer/Resources/ReleaseNotes.json').read_text())
     assert notes['version'] == expected, 'Bundled release notes mismatch'
     changelog = (root / 'docs/product/changelog.md').read_text()
@@ -48,10 +52,12 @@ def verify(root, app=None, ipa=None):
         commands = subprocess.check_output(['xcrun', 'vtool', '-show-build', str(executable)], text=True)
         assert re.search(r'platform\s+IOS\b', commands) and re.search(r'minos\s+15\.0\b', commands)
         assert json.loads((app / 'ReleaseNotes.json').read_text()) == notes
+        if project_metadata.exists(): assert (app / 'Project.json').read_bytes() == project_metadata.read_bytes()
         assert not list(app.rglob('*.xctest'))
         assert not any(p.name.lower().startswith('testtone') for p in app.rglob('*'))
         assert list(app.glob('AppIcon*.png')), 'Compiled app icon missing'
     if ipa:
+        assert ipa.name == f"SoundBunker-unsigned-{expected}.ipa", "IPA filename must match its version"
         with zipfile.ZipFile(ipa) as archive:
             assert archive.testzip() is None
             assert archive.read('Payload/OfflineMusicPlayer.app/Info.plist') == (app / 'Info.plist').read_bytes()

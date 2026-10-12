@@ -2,7 +2,9 @@
 from pathlib import Path
 import hashlib
 
+from update_project_metadata import update
 root = Path(__file__).resolve().parents[1]
+update(root)
 project = root / 'OfflineMusicPlayer.xcodeproj'
 project.mkdir(exist_ok=True)
 objects = {}
@@ -31,13 +33,15 @@ app_product = add('appProduct', '{isa = PBXFileReference; explicitFileType = wra
 test_product = add('testProduct', '{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = OfflineMusicPlayerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;}')
 assets = add('assets', '{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = OfflineMusicPlayer/Assets.xcassets; sourceTree = SOURCE_ROOT;}')
 notes = add('releaseNotes', '{isa = PBXFileReference; lastKnownFileType = text.json; path = OfflineMusicPlayer/Resources/ReleaseNotes.json; sourceTree = SOURCE_ROOT;}')
+project_info = add('projectInfo', '{isa = PBXFileReference; lastKnownFileType = text.json; path = OfflineMusicPlayer/Resources/Project.json; sourceTree = SOURCE_ROOT;}')
+project_info_build = add('projectInfoBuild', '{isa = PBXBuildFile; fileRef = '+project_info+';}')
 notes_build = add('releaseNotesBuild', '{isa = PBXBuildFile; fileRef = '+notes+';}')
 add('assetsBuild', '{isa = PBXBuildFile; fileRef = '+assets+';}')
 products = add('products', '{isa = PBXGroup; children = '+array([app_product,test_product])+'; name = Products; sourceTree = "<group>";}')
-group = add('rootGroup', '{isa = PBXGroup; children = '+array(source_refs+test_refs+[fixture,assets,notes,products])+'; sourceTree = "<group>";}')
+group = add('rootGroup', '{isa = PBXGroup; children = '+array(source_refs+test_refs+[fixture,assets,notes,project_info,products])+'; sourceTree = "<group>";}')
 def phase(name, kind, files):
     return add(name, '{isa = '+kind+'; buildActionMask = 2147483647; files = '+array(files)+'; runOnlyForDeploymentPostprocessing = 0;}')
-app_phases = [phase('appSources','PBXSourcesBuildPhase',source_builds),phase('appFrameworks','PBXFrameworksBuildPhase',[]),phase('appResources','PBXResourcesBuildPhase',[uid('assetsBuild'),notes_build])]
+app_phases = [phase('appSources','PBXSourcesBuildPhase',source_builds),phase('appFrameworks','PBXFrameworksBuildPhase',[]),phase('appResources','PBXResourcesBuildPhase',[uid('assetsBuild'),notes_build,project_info_build])]
 test_phases = [phase('testSources','PBXSourcesBuildPhase',test_builds),phase('testFrameworks','PBXFrameworksBuildPhase',[]),phase('testResources','PBXResourcesBuildPhase',[fixture_build])]
 def config_list(name, configs):
     return add(name, '{isa = XCConfigurationList; buildConfigurations = '+array(configs)+'; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;}')

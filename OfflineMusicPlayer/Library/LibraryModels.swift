@@ -49,10 +49,13 @@ struct Track: Identifiable, Codable, Equatable {
     var albumKey: String { albumArtist + "\u{1f}" + album }
 }
 
-struct MusicPlaylist: Identifiable, Codable {
+struct MusicPlaylist: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
     var trackIDs: [String] = []
+    var importedSourceID: UUID? = nil
+    var importedPath: String? = nil
+    var unresolvedPaths: [String]? = nil
 }
 
 enum RepeatMode: String, Codable, CaseIterable { case off, all, one }
@@ -71,6 +74,16 @@ struct LyricLine: Identifiable, Equatable {
 }
 
 enum LRCParser {
+    static func activeLine(in lines: [LyricLine], at position: Double) -> Int? {
+        guard position.isFinite else { return nil }
+        var low = 0, high = lines.count
+        while low < high {
+            let middle = (low + high) / 2
+            if lines[middle].time <= position { low = middle + 1 } else { high = middle }
+        }
+        return low > 0 ? lines[low - 1].id : nil
+    }
+
     static func parse(_ text: String) -> [LyricLine] {
         let pattern = try! NSRegularExpression(pattern: "\\[(\\d+):(\\d{1,2}(?:\\.\\d+)?)\\]")
         let offsetPattern = try! NSRegularExpression(pattern: "\\[offset:([+-]?\\d+)\\]", options: .caseInsensitive)

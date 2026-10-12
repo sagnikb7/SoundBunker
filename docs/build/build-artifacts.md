@@ -8,8 +8,8 @@ User preference: every **create build** request produces both an IPA and a ZIP c
 
 Outputs:
 
-- `dist/SoundBunker-unsigned.ipa`
-- `dist/SoundBunker-unsigned.ipa.zip`
+- `dist/SoundBunker-unsigned-<version>.ipa`
+- `dist/SoundBunker-unsigned-<version>.ipa.zip`
 
 The script prepares version/build and bundled release notes before compilation, then records the successful release in the [changelog](../product/changelog.md). See [versioning rules](versioning.md).
 
@@ -20,3 +20,5 @@ This is an **unsigned/unprovisioned device package for re-signing**, not an App 
 Before delivery, verify the app's MinimumOSVersion and Mach-O platform/minimum, arm64 architecture, SoundBunker display name, bundled icon and absence of TestTone/sample audio/XCTest bundles. Record checksums and test results in `docs/testing/verification/`. Never claim installation or device playback from packaging success.
 
 The original generated project script is a maintenance utility; rerunning it replaces manual project settings. Tests and test fixtures remain exclusively in the test target.
+
+Both filenames include the app release version, for example `SoundBunker-unsigned-1.1.4.ipa` and `SoundBunker-unsigned-1.1.4.ipa.zip`. The ZIP contains the IPA with that same versioned name. Packaging rejects names that disagree with the built app version. Rebuilding the same version replaces that version’s files; older versioned packages remain available locally.

@@ -126,5 +126,56 @@ final class PlayerPolishTests: XCTestCase {
         }
         XCTAssertEqual(image.size.width, 320); XCTAssertEqual(image.size.height, 548)
         try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-320x548.png"))
+
+        // Also inspect the two-line header and wrapped metadata without starting playback.
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
+        try FileManager.default.copyItem(at: fixture, to: root.appendingPathComponent("A Song With A Longer Display Title.wav"))
+        for name in ["B Next Song", "C Last Song"] { try FileManager.default.copyItem(at: fixture, to: root.appendingPathComponent(name + ".wav")) }
+        library.rescan(); try await waitForScan(library)
+        try library.database?.save(PlaybackSnapshot(queue: library.sortedTracks.map(\.id), index: 0, position: 0, repeatMode: .off, shuffle: false), key: "playback", kind: "playback")
+        try library.database?.commit()
+        let restored = PlaybackCoordinator(); restored.connect(library)
+        XCTAssertFalse(restored.isPlaying)
+        for mode in [NowPlayingMode.artwork, .queue, .lyrics] {
+            let populatedHost = UIHostingController(rootView: NowPlayingView(initialMode: mode).environmentObject(library).environmentObject(restored))
+            populatedHost.overrideUserInterfaceStyle = .dark
+            populatedHost.view.frame = bounds; populatedHost.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let populated = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
+                populatedHost.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+            }
+            let name = mode == .artwork ? "populated" : mode == .queue ? "queue" : "lyrics"
+            try XCTUnwrap(populated.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-\(name)-320x548.png"))
+        }
+
+        defer { restored.pause() }
+        for (name, playing) in [("playing", true), ("paused", false)] {
+            if playing { restored.play(); try await waitForPlayback(restored); XCTAssertTrue(restored.isPlaying) } else { restored.pause(); XCTAssertFalse(restored.isPlaying) }
+            let motionHost = UIHostingController(rootView: NowPlayingView().environmentObject(library).environmentObject(restored))
+            motionHost.overrideUserInterfaceStyle = .dark
+            motionHost.view.frame = bounds; motionHost.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 350_000_000)
+            let rendered = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
+                motionHost.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+            }
+            try XCTUnwrap(rendered.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-\(name)-320x548.png"))
+        }
+
+        // The system accessibility environment is read-only; render the same artwork policy directly.
+        var reducedImages: [Data] = []
+        for playing in [false, true] {
+            let reducedHost = UIHostingController(rootView: PlaybackArtworkView(reduceMotion: true, track: restored.currentTrack, side: 200, isPlaying: playing)
+                .frame(width: 240, height: 240).background(Color(UIColor.systemBackground)).ignoresSafeArea().environmentObject(library))
+            reducedHost.overrideUserInterfaceStyle = .dark
+            let reducedBounds = CGRect(x: 0, y: 0, width: 240, height: 240)
+            reducedHost.view.frame = reducedBounds; reducedHost.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let rendered = UIGraphicsImageRenderer(bounds: reducedBounds, format: format).image { _ in
+                reducedHost.view.drawHierarchy(in: reducedBounds, afterScreenUpdates: true)
+            }
+            reducedImages.append(try XCTUnwrap(rendered.pngData()))
+        }
+        XCTAssertEqual(reducedImages[0], reducedImages[1], "Reduce Motion must keep artwork geometry identical on play/pause")
+        try reducedImages[0].write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-reduced-motion.png"))
     }
 }

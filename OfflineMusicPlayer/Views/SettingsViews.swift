@@ -12,72 +12,54 @@ struct AppReleaseNotes: Decodable {
 }
 
 enum AppIdentity {
+    static let projectURL: URL = {
+        if let resource = Bundle.main.url(forResource: "Project", withExtension: "json"), let data = try? Data(contentsOf: resource),
+           let metadata = try? JSONDecoder().decode([String: String].self, from: data), let value = metadata["githubURL"],
+           let url = URL(string: value), url.scheme == "https", url.host == "github.com" { return url }
+        return URL(string: "https://github.com/sagnikb7/SoundBunker")!
+    }()
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—" }
     static var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—" }
     static var versionLabel: String { "Version \(version) (\(build))" }
-    static var icon: UIImage? {
-        let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any]
-        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
-        let names = primary?["CFBundleIconFiles"] as? [String]
-        return names?.last.flatMap { UIImage(named: $0) }
-    }
-}
-
-struct SettingsRow: View {
-    var title: String
-    var symbol: String
-    var tint: Color = .blue
-    var value: String? = nil
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white).frame(width: 26, height: 26)
-                .background(tint).cornerRadius(6).accessibilityHidden(true)
-            Text(title).foregroundColor(.primary)
-            Spacer(minLength: 4)
-            if let value = value { Text(value).font(.subheadline).foregroundColor(.secondary).lineLimit(1) }
-        }
-    }
 }
 
 struct SettingsView: View {
     @EnvironmentObject private var library: LibraryStore
+    @AppStorage("rememberPlaybackPosition") private var rememberPosition = true
+    @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("artistPhotosEnabled") private var artistPhotosEnabled = true
     var body: some View {
         List {
             Section {
-                HStack(spacing: 12) {
-                    if let image = AppIdentity.icon {
-                        Image(uiImage: image).resizable().frame(width: 48, height: 48).cornerRadius(10).accessibilityHidden(true)
-                    } else {
-                        Image(systemName: "waveform").font(.title2).foregroundColor(.blue).frame(width: 48, height: 48)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("SoundBunker").font(.headline)
-                        Text("Your music. Your pocket.").font(.footnote).foregroundColor(.secondary)
-                        Text(AppIdentity.versionLabel).font(.caption).foregroundColor(.secondary)
-                    }
-                }.padding(.vertical, 4)
+                NavigationLink("Music Folders") { SourceSettingsView() }
+                Button("Import Audio Files") { library.pickerRequest = PickerRequest(folders: false) }.disabled(library.busy)
+                Button("Rescan Library") { library.rescan() }.disabled(library.busy)
+                NavigationLink("Library Statistics") { LibraryStatisticsView() }
+                if library.scanning { ScanProgressView() }
+            } header: { Text("Music Library") } footer: {
+                Text(library.scanning ? library.scanStatus : "Enabled folders are scanned automatically when the app opens.")
+            }
+            Section("Playback") {
+                Toggle("Remember Position", isOn: $rememberPosition).accessibilityLabel("Remember Playback Position")
+                NavigationLink("Playback Preferences") { PlaybackSettingsView() }
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                }
             }
             Section {
-                NavigationLink { SourceSettingsView() } label: { SettingsRow(title: "Music Folders", symbol: "folder.fill", value: "\(library.sources.filter(\.enabled).count) enabled") }
-                Button { library.pickerRequest = PickerRequest(folders: false) } label: { SettingsRow(title: "Import Audio Files", symbol: "square.and.arrow.down.fill") }.disabled(library.busy)
-                Button { library.rescan() } label: { SettingsRow(title: "Rescan Library", symbol: "arrow.clockwise") }.disabled(library.busy)
-                if library.scanning { ScanProgressView() }
-            } header: { Text("Music Library") } footer: { Text(library.scanning ? library.scanStatus : "Enabled folders are checked when the app opens.") }
-            Section("Preferences") {
-                NavigationLink { PlaybackSettingsView() } label: { SettingsRow(title: "Playback", symbol: "play.fill", tint: .purple) }
-                NavigationLink { AppearanceSettingsView() } label: { SettingsRow(title: "Appearance", symbol: "paintbrush.fill", tint: .indigo) }
-            }
-            Section("Storage & Library") {
-                NavigationLink { LibraryStatisticsView() } label: { SettingsRow(title: "Library Statistics", symbol: "chart.bar.fill", tint: .green) }
-                NavigationLink { ArtworkStorageView() } label: { SettingsRow(title: "Artwork Cache", symbol: "internaldrive.fill", tint: .orange) }
-            }
+                Toggle("Online Artist Photos", isOn: $artistPhotosEnabled)
+            } header: { Text("Artist Images") } footer: { Text("When Artists is opened, names are sent to Wikipedia/Wikimedia to find free images. Photos are cached for offline use; music and lyrics remain local.") }
+            ArtworkCacheSection()
             Section("About") {
-                NavigationLink { WhatsNewView() } label: { SettingsRow(title: "What's New", symbol: "sparkles", tint: .pink) }
-                NavigationLink { AboutView() } label: { SettingsRow(title: "About SoundBunker", symbol: "info.circle.fill", tint: .gray) }
+                LabeledContentRow(label: "Version", value: "\(AppIdentity.version) (\(AppIdentity.build))")
+                NavigationLink("What's New") { WhatsNewView() }
+                NavigationLink("About SoundBunker") { AboutView() }
+                Link("View Project on GitHub", destination: AppIdentity.projectURL)
             }
         }.listStyle(.insetGrouped).environment(\.defaultMinListRowHeight, 44)
-            .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Settings")
     }
 }
 
@@ -141,23 +123,31 @@ struct LibraryStatisticsView: View {
     }
 }
 struct ArtworkStorageView: View {
+    var body: some View {
+        List { ArtworkCacheSection() }.listStyle(.insetGrouped)
+            .navigationTitle("Artwork Cache").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Shared by the original Settings layout and the dedicated storage screen.
+struct ArtworkCacheSection: View {
     @EnvironmentObject private var library: LibraryStore
     @State private var bytes: Int?
     @State private var confirming = false
     var body: some View {
-        List {
-            Section {
-                LabeledContentRow(label: "Artwork Cache", value: bytes.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "Calculating…")
-                LabeledContentRow(label: "Cache Limit", value: "50 MB")
-                if library.clearingArtwork { ProgressView("Clearing artwork…") }
-                Button("Clear Artwork Cache", role: .destructive) { confirming = true }.disabled(library.busy || bytes == 0 || bytes == nil)
-            } footer: { Text("Only generated covers are cleared. Your songs, playlists and favorites stay intact. Covers return during the next scan.") }
-        }.listStyle(.insetGrouped).navigationTitle("Artwork Cache").navigationBarTitleDisplayMode(.inline)
-            .task { await refreshSize() }
-            .confirmationDialog("Clear artwork cache?", isPresented: $confirming, titleVisibility: .visible) {
-                Button("Clear Cache", role: .destructive) { Task { ThumbnailLoader.shared.clear(); await library.clearArtwork(); await refreshSize() } }
-                Button("Cancel", role: .cancel) {}
-            }
+        Section {
+            LabeledContentRow(label: "Artwork Cache", value: bytes.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "Calculating…")
+            LabeledContentRow(label: "Cache Limit", value: "50 MB")
+            if library.clearingArtwork { ProgressView("Clearing artwork…") }
+            Button("Clear Artwork Cache", role: .destructive) { confirming = true }.disabled(library.busy || bytes == 0 || bytes == nil)
+        } header: { Text("Storage") } footer: {
+            Text("Only generated covers are cleared. Your songs, playlists and favorites stay intact. Covers return during the next scan.")
+        }
+        .task(id: library.scanning) { await refreshSize() }
+        .confirmationDialog("Clear artwork cache?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Clear Cache", role: .destructive) { Task { ThumbnailLoader.shared.clear(); await library.clearArtwork(); await refreshSize() } }
+            Button("Cancel", role: .cancel) {}
+        }
     }
     private func refreshSize() async {
         let directory = library.artworkDirectory
@@ -183,7 +173,9 @@ struct AboutView: View {
     var body: some View {
         List {
             Section { Text("SoundBunker").font(.title3.bold()); Text(AppIdentity.versionLabel).foregroundColor(.secondary); Text("Native, offline music for your iPod.").font(.subheadline) }
-            Section("Privacy") { Label("No accounts or tracking", systemImage: "checkmark.shield"); Text("Your library stays on your device. No music, artwork or lyrics are downloaded by SoundBunker.").font(.subheadline).foregroundColor(.secondary) }
+            Section("Privacy") { Label("No accounts or tracking", systemImage: "checkmark.shield"); Text("Your library stays on your device. Music, album artwork and lyrics stay local. Optional artist photos use Wikipedia/Wikimedia: artist names and normal connection information are sent when Artists is opened. Disable Online Artist Photos in Settings to stop lookups. No music files are uploaded.").font(.subheadline).foregroundColor(.secondary) }
+            Section("Project") { Link("SoundBunker on GitHub", destination: AppIdentity.projectURL) }
+            Section("Artist Photos") { Text("Free images from Wikimedia, cached offline. Open a photo’s credit from its artist row for the creator, license and original image page.").font(.subheadline).foregroundColor(.secondary) }
             Section("Audio Formats") { Text("Native playback for local audio files. Availability depends on your iOS decoder and file encoding.").font(.subheadline); Text("MP3, M4A/AAC, ALAC, WAV and AIFF are native candidates. FLAC, Ogg and Opus may be unavailable.").font(.subheadline).foregroundColor(.secondary) }
             Section("File Access") { Text("SoundBunker scans its own Files folder and folders you choose. iOS does not allow unrestricted access to every folder on the device.").font(.subheadline).foregroundColor(.secondary) }
         }.listStyle(.insetGrouped).navigationTitle("About").navigationBarTitleDisplayMode(.inline)

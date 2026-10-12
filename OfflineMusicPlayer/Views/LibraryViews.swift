@@ -46,7 +46,7 @@ struct SongRow: View {
                     }
                     Spacer(minLength: 0)
                 }.frame(minHeight: 44).contentShape(Rectangle())
-            }.buttonStyle(.plain)
+            }.buttonStyle(VisualPressButtonStyle())
             Menu {
                 Button("Play Next", systemImage: "text.insert") { playback.playNext(track) }
                 Button("Add to Queue", systemImage: "text.badge.plus") { playback.addToQueue(track) }
@@ -133,7 +133,7 @@ struct AlbumsView: View {
     @EnvironmentObject private var library: LibraryStore
     var body: some View {
         ScrollView { LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 16) {
-            ForEach(AlbumGroup.make(library.visibleTracks)) { album in NavigationLink { AlbumDetailView(album: album) } label: { AlbumTile(album: album) }.buttonStyle(.plain) }
+            ForEach(library.browse.albums) { album in NavigationLink { AlbumDetailView(album: album) } label: { AlbumTile(album: album) }.buttonStyle(.plain) }
         }.padding(16) }.navigationTitle("Albums")
     }
 }
@@ -159,15 +159,18 @@ struct GroupsView: View {
     var kind: Kind
     var body: some View {
         List(groups, id: \.self) { group in
-            let tracks = library.sortedTracks.filter { (kind == .artist ? $0.artist : $0.genre) == group }
+            let tracks = (kind == .artist ? library.browse.artists[group] : library.browse.genres[group]) ?? []
             NavigationLink { SongListView(title: group, tracks: tracks) } label: {
-                HStack { Image(systemName: kind == .artist ? "music.mic" : "waveform").foregroundColor(.blue).frame(width: 32)
-                    VStack(alignment: .leading) { Text(group); Text("\(tracks.count) songs").font(.footnote).foregroundColor(.secondary) }
-                }.frame(minHeight: 44)
+                if kind == .artist { ArtistGroupRow(artist: group, count: tracks.count) }
+                else {
+                    HStack { Image(systemName: "waveform").foregroundColor(.blue).frame(width: 32)
+                        VStack(alignment: .leading) { Text(group); Text("\(tracks.count) songs").font(.footnote).foregroundColor(.secondary) }
+                    }.frame(minHeight: 44)
+                }
             }
         }.listStyle(.plain).navigationTitle(kind == .artist ? "Artists" : "Genres")
     }
-    private var groups: [String] { Set(library.visibleTracks.map { kind == .artist ? $0.artist : $0.genre }).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+    private var groups: [String] { kind == .artist ? library.browse.artistNames : library.browse.genreNames }
 }
 
 struct FoldersView: View {

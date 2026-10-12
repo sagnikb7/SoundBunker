@@ -40,10 +40,10 @@ struct RootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
             .onAppear {
-                if !launched { launched = true; playback.connect(library); library.rescan() }
+                if !launched { launched = true; playback.connect(library); library.rescanIfNeeded(minimumInterval: 0) }
             }
             .onChange(of: scenePhase) { phase in
-                if phase == .active && launched { library.rescan() }
+                if phase == .active && launched { library.rescanIfNeeded() }
                 else if phase == .background { playback.persist() }
             }
     }
@@ -63,7 +63,7 @@ struct RootView: View {
         }.accentColor(.blue)
     }
     private func navigation<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        NavigationView { content().safeAreaInset(edge: .bottom) {
+        NavigationView { content().background(BackGestureSupport()).safeAreaInset(edge: .bottom) {
             #if !targetEnvironment(macCatalyst)
             Color.clear.frame(height: playback.currentTrack == nil ? 0 : 56)
             #endif
@@ -99,7 +99,7 @@ struct LibraryHomeView: View {
                     NavigationLink { GroupsView(kind: .artist) } label: { Label("Artists", systemImage: "music.mic") }
                     NavigationLink { GroupsView(kind: .genre) } label: { Label("Genres", systemImage: "waveform") }
                     NavigationLink { FoldersView() } label: { Label("Folders", systemImage: "folder") }
-                    NavigationLink { SongListView(title: "Recently Added", tracks: library.tracks.sorted { $0.added > $1.added }) } label: { Label("Recently Added", systemImage: "clock") }
+                    NavigationLink { SongListView(title: "Recently Added", tracks: library.browse.recentTracks) } label: { Label("Recently Added", systemImage: "clock") }
                     Section("Recently Added") {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(alignment: .top, spacing: 12) {
@@ -119,7 +119,7 @@ struct LibraryHomeView: View {
                 Button("Rescan Library") { library.rescan() }
             } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Add music") } }
     }
-    private var recentAlbums: [AlbumGroup] { AlbumGroup.make(library.visibleTracks).sorted { $0.added > $1.added }.prefix(8).map { $0 } }
+    private var recentAlbums: [AlbumGroup] { library.browse.recentAlbums }
 }
 
 struct ScanProgressView: View {

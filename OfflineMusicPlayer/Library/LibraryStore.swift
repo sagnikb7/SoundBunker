@@ -4,9 +4,9 @@ import Combine
 @MainActor
 final class LibraryStore: ObservableObject {
     @Published private(set) var tracks: [Track] = [] {
-        didSet { trackLookup = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); visibleCache = nil; sortedCache = nil }
+        didSet { trackLookup = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); visibleCache = nil; sortedCache = nil; browseCache = nil }
     }
-    @Published private(set) var sources: [MusicSource] = [] { didSet { visibleCache = nil; sortedCache = nil } }
+    @Published private(set) var sources: [MusicSource] = [] { didSet { visibleCache = nil; sortedCache = nil; browseCache = nil } }
     @Published private(set) var playlists: [MusicPlaylist] = []
     @Published private(set) var scanning = false
     @Published private(set) var clearingArtwork = false
@@ -23,6 +23,10 @@ final class LibraryStore: ObservableObject {
     private var trackLookup: [String: Track] = [:]
     private var visibleCache: [Track]?
     private var sortedCache: [Track]?
+    private var browseCache: BrowseIndex?
+    private var artworkNeedsTrim = false
+    private var lastScan = Date.distantPast
+    private var resolvedRoots: [UUID: URL] = [:]
 
     init(documents: URL? = nil, inMemory: Bool = false) {
         let fm = FileManager.default
@@ -39,6 +43,7 @@ final class LibraryStore: ObservableObject {
             try fm.createDirectory(at: artworkDirectory, withIntermediateDirectories: true)
             database = try LibraryDatabase(inMemory: inMemory)
             tracks = try database!.all("track", as: Track.self)
+            trackLookup = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
             sources = try database!.all("source", as: MusicSource.self)
             playlists = try database!.all("playlist", as: MusicPlaylist.self)
             for index in sources.indices where sources[index].isOwned && sources[index].name != "SoundBunker" {
@@ -65,10 +70,12 @@ final class LibraryStore: ObservableObject {
     func track(_ id: String) -> Track? { trackLookup[id] }
     func sourceURL(_ source: MusicSource) throws -> URL {
         if source.isOwned { return documents }
+        if let cached = resolvedRoots[source.id] { return cached }
         guard let bookmark = source.bookmark else { throw CocoaError(.fileReadNoPermission) }
         var stale = false
         let url = try URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
-        if stale { throw NSError(domain: "PocketMusic", code: 3, userInfo: [NSLocalizedDescriptionKey: "Folder permission has changed. Reconnect it in Settings."]) }
+        if stale && !FileManager.default.isReadableFile(atPath: url.path) { throw NSError(domain: "PocketMusic", code: 3, userInfo: [NSLocalizedDescriptionKey: "Folder permission has changed. Reconnect it in Settings."]) }
+        resolvedRoots[source.id] = url
         return url
     }
     func addFolder(_ url: URL, reconnecting: UUID? = nil) {
@@ -77,10 +84,12 @@ final class LibraryStore: ObservableObject {
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
             try LocalFilePolicy.check(url)
+            guard try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { throw CocoaError(.fileReadInvalidFileName) }
             if reconnecting == nil, sources.contains(where: { (try? sourceURL($0).resolvingSymlinksInPath().standardizedFileURL) == url.resolvingSymlinksInPath().standardizedFileURL }) { rescan(); return }
             let data = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
             var source = MusicSource(id: reconnecting ?? UUID(), name: url.lastPathComponent, bookmark: data, isOwned: false)
             if let old = sources.first(where: { $0.id == source.id }) { source.enabled = old.enabled; source.excludedPaths = old.excludedPaths }
+            resolvedRoots[source.id] = nil
             sources.removeAll { $0.id == source.id }; sources.append(source); try save(source)
             rescan(only: source.id)
         } catch { errorMessage = error.localizedDescription }
@@ -88,17 +97,18 @@ final class LibraryStore: ObservableObject {
 
     func importFiles(_ urls: [URL]) {
         guard !busy else { errorMessage = "Wait for the current scan to finish before importing."; return }
+        scanning = true; scannedCount = 0; scanStatus = "Importing files"
         scanTask = Task {
-            scanning = true; scannedCount = 0; scanStatus = "Importing files"
             let destination = documents
-            let result = await Task.detached(priority: .userInitiated) {
+            let worker = Task.detached(priority: .userInitiated) {
                 var errors: [String] = []
                 for url in urls {
+                    if Task.isCancelled { break }
                     let access = url.startAccessingSecurityScopedResource()
                     defer { if access { url.stopAccessingSecurityScopedResource() } }
                     do {
                         try LocalFilePolicy.check(url)
-                        guard LibraryScanner.extensions.contains(url.pathExtension.lowercased()) else { continue }
+                        guard LibraryScanner.extensions.union(["m3u", "m3u8"]).contains(url.pathExtension.lowercased()) else { continue }
                         var target = destination.appendingPathComponent(url.lastPathComponent)
                         if target.standardizedFileURL == url.standardizedFileURL { continue }
                         if FileManager.default.fileExists(atPath: target.path) {
@@ -117,19 +127,30 @@ final class LibraryStore: ObservableObject {
                     } catch { errors.append("\(url.lastPathComponent): \(error.localizedDescription)") }
                 }
                 return errors
-            }.value
-            scanning = false
+            }
+            let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+            scanning = false; scanTask = nil
             if !result.isEmpty { errorMessage = result.prefix(5).joined(separator: "\n") }
-            rescan()
+            if Task.isCancelled { scanStatus = "Import cancelled" } else { rescan() }
         }
     }
 
+    func rescanIfNeeded(minimumInterval: TimeInterval = 120) {
+        guard !busy, Date().timeIntervalSince(lastScan) >= minimumInterval else { return }
+        rescan()
+    }
+    var browse: BrowseIndex {
+        if let cached = browseCache { return cached }
+        let value = BrowseIndex(tracks: sortedTracks)
+        browseCache = value; return value
+    }
     func rescan(only id: UUID? = nil) {
         guard !busy, database != nil else { return }
         let selected = sources.filter { $0.enabled && (id == nil || $0.id == id) }
         scanning = true; scannedCount = 0
+        if id == nil { lastScan = Date() }
         scanTask = Task {
-            defer { scanning = false; scanTask = nil; trimArtwork() }
+            defer { scanning = false; scanTask = nil }
             for var source in selected {
                 if Task.isCancelled { scanStatus = "Scan cancelled"; break }
                 scanStatus = "Scanning \(source.name)"
@@ -137,7 +158,7 @@ final class LibraryStore: ObservableObject {
                     let root = try sourceURL(source)
                     let access = root.startAccessingSecurityScopedResource()
                     defer { if access { root.stopAccessingSecurityScopedResource() } }
-                    let snapshot = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+                    let snapshot = trackLookup
                     let result = try await scanner.scan(root: root, sourceID: source.id, existing: snapshot, cache: artworkDirectory, excluded: source.excludedPaths) { batch, count in
                         await self.receive(batch, count: count)
                     }
@@ -151,6 +172,7 @@ final class LibraryStore: ObservableObject {
                         try database?.save(updated[index], key: "track:\(updated[index].id)", kind: "track")
                     }
                     if changed { tracks = updated }
+                    try mergeImportedPlaylists(result.playlists, source: source)
                     source.needsReconnect = false; update(source); try save(source)
                     try database?.commit()
                     scanStatus = "\(scannedCount) files checked\(result.skipped > 0 ? "; \(result.skipped) unavailable" : "")"
@@ -168,7 +190,32 @@ final class LibraryStore: ObservableObject {
                     try? save(source); errorMessage = "\(source.name): \(error.localizedDescription)"
                 }
             }
+            if artworkNeedsTrim { await trimArtwork(); artworkNeedsTrim = false }
         }
+    }
+    private func mergeImportedPlaylists(_ manifests: [ScannedPlaylist], source: MusicSource) throws {
+        guard !manifests.isEmpty else { return }
+        var pathIndex: [String: String] = [:]
+        for track in tracks {
+            for location in track.locations where location.sourceID == source.id && location.available && source.permits(location.relativePath) {
+                pathIndex[location.relativePath] = track.id
+            }
+        }
+        var updated = playlists
+        var changed = false
+        for manifest in manifests {
+            let index = updated.firstIndex { $0.importedSourceID == source.id && $0.importedPath == manifest.path }
+            var playlist = index.map { updated[$0] } ?? MusicPlaylist(name: manifest.name)
+            playlist.name = manifest.name; playlist.importedSourceID = source.id; playlist.importedPath = manifest.path
+            playlist.trackIDs = manifest.entries.compactMap { pathIndex[$0] }
+            playlist.unresolvedPaths = manifest.entries.filter { pathIndex[$0] == nil }
+            if let index = index {
+                if updated[index] == playlist { continue }
+                updated[index] = playlist
+            } else { updated.append(playlist) }
+            try database?.save(playlist, key: "playlist:\(playlist.id)", kind: "playlist"); changed = true
+        }
+        if changed { try database?.commit(); playlists = updated }
     }
     private func receive(_ batch: [Track], count: Int) {
         do {
@@ -176,6 +223,7 @@ final class LibraryStore: ObservableObject {
             var indices = Dictionary(uniqueKeysWithValues: updated.enumerated().map { ($0.element.id, $0.offset) })
             var changed = false
             for var track in batch {
+                if track.artwork != nil && track.artwork != trackLookup[track.id]?.artwork { artworkNeedsTrim = true }
                 if let index = indices[track.id] {
                     track.favorite = updated[index].favorite
                     if track == updated[index] { continue }
@@ -228,6 +276,7 @@ final class LibraryStore: ObservableObject {
     func removeSource(_ source: MusicSource) {
         guard !source.isOwned, !busy else { return }
         do {
+            resolvedRoots[source.id] = nil
             sources.removeAll { $0.id == source.id }
             try database?.remove(key: "source:\(source.id)")
             var updated = tracks
@@ -317,14 +366,17 @@ final class LibraryStore: ObservableObject {
             if let failure = failure { errorMessage = "Some artwork could not be cleared: \(failure)" }
         } catch { errorMessage = "Couldn't update the artwork cache: \(error.localizedDescription)" }
     }
-    private func trimArtwork() {
-        let files = (try? FileManager.default.contentsOfDirectory(at: artworkDirectory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])) ?? []
+    private func trimArtwork() async {
+        let directory = artworkDirectory
         let used = Set(tracks.compactMap(\.artwork))
-        var total = 0
-        for file in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            if !used.contains(file.lastPathComponent) || total + size > 50_000_000 { try? FileManager.default.removeItem(at: file) }
-            else { total += size }
-        }
+        await Task.detached(priority: .utility) {
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+            var total = 0
+            for file in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                if !used.contains(file.lastPathComponent) || total + size > 50_000_000 { try? FileManager.default.removeItem(at: file) }
+                else { total += size }
+            }
+        }.value
     }
 }
