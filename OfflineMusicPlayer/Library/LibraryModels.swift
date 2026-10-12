@@ -45,6 +45,14 @@ struct Track: Identifiable, Codable, Equatable {
     var locations: [TrackLocation]
     var added: Date
     var favorite = false
+    // Optional fields keep older persisted JSON records readable without a schema migration.
+    var audioFormat: String? = nil
+    var bitrate: Int? = nil
+    var audioQualityLabel: String {
+        let format = audioFormat ?? locations.first.map { URL(fileURLWithPath: $0.relativePath).pathExtension.uppercased() }.flatMap { $0.isEmpty ? nil : $0 } ?? "Audio"
+        if let bitrate = bitrate, bitrate > 0 { return "\(format) · \(Int((Double(bitrate) / 1000).rounded())) kbps" }
+        return "\(format) · Bitrate unavailable"
+    }
     var available: Bool { locations.contains { $0.available } }
     var albumKey: String { albumArtist + "\u{1f}" + album }
 }
@@ -56,6 +64,18 @@ struct MusicPlaylist: Identifiable, Codable, Equatable {
     var importedSourceID: UUID? = nil
     var importedPath: String? = nil
     var unresolvedPaths: [String]? = nil
+}
+
+struct PlaybackHistoryEntry: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var trackID: String
+    var playedAt = Date()
+}
+
+struct PlayedSong: Identifiable {
+    let entry: PlaybackHistoryEntry
+    let track: Track
+    var id: UUID { entry.id }
 }
 
 enum RepeatMode: String, Codable, CaseIterable { case off, all, one }

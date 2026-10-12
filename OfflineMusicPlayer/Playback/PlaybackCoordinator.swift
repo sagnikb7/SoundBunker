@@ -2,13 +2,15 @@ import AVFoundation
 import Combine
 import MediaPlayer
 import UIKit
+import WidgetKit
 
 @MainActor
 final class PlaybackCoordinator: ObservableObject {
-    @Published private(set) var currentTrack: Track?
+    @Published private(set) var currentTrack: Track? { didSet { publishWidget() } }
     @Published private(set) var isPlaying = false
     @Published private(set) var playbackRequested = false
     private var playbackGeneration = 0
+    private var recordedCurrentPlayback = false
     private var lyricsTracking = false
     private var playerVisible = false
     @Published private(set) var duration: TimeInterval = 0
@@ -32,6 +34,8 @@ final class PlaybackCoordinator: ObservableObject {
     private var scopedRoot: URL?
     private var shouldResume = false
     private var artwork: MPMediaItemArtwork?
+    private var widgetTask: Task<Void, Never>?
+    private var widgetLibrarySubscription: AnyCancellable?
     private var lastSaved = Date.distantPast
 
     init(engine: AudioEngine? = nil, preferences: UserDefaults = .standard) {
@@ -46,6 +50,7 @@ final class PlaybackCoordinator: ObservableObject {
         configureSystemControls()
     }
     deinit {
+        widgetTask?.cancel()
         timer?.invalidate()
         notifications.forEach(NotificationCenter.default.removeObserver)
         remoteTargets.forEach { $0.0.removeTarget($0.1) }
@@ -54,6 +59,8 @@ final class PlaybackCoordinator: ObservableObject {
     func connect(_ library: LibraryStore) {
         guard self.library == nil else { return }
         self.library = library
+        widgetLibrarySubscription = library.$tracks.dropFirst().debounce(for: .milliseconds(500), scheduler: RunLoop.main).sink { [weak self] _ in self?.publishWidget() }
+        publishWidget()
         if let state = try? library.database?.all("playback", as: PlaybackSnapshot.self).first,
            state.index >= 0 {
             shuffle = state.shuffle; repeatMode = state.repeatMode
@@ -102,12 +109,13 @@ final class PlaybackCoordinator: ObservableObject {
         else { seek(to: 0) }
     }
     private func advance(natural: Bool) {
-        if natural && repeatMode == .one { seek(to: 0); play(); return }
+        if natural && repeatMode == .one { recordedCurrentPlayback = false; seek(to: 0); play(); return }
         if queueIndex + 1 < queue.count { queueIndex += 1; loadCurrent(autoplay: true) }
         else if repeatMode == .all && !queue.isEmpty { queueIndex = 0; loadCurrent(autoplay: true) }
         else { pause(); position = duration; persist(); updateNowPlaying() }
     }
     private func loadCurrent(autoplay: Bool) {
+        recordedCurrentPlayback = false
         playbackGeneration += 1; playbackRequested = false
         engine.stop(); stopTimer(); releaseAccess(); isPlaying = false; position = 0
         guard let library = library else { return }
@@ -146,6 +154,16 @@ final class PlaybackCoordinator: ObservableObject {
         }
         throw lastError
     }
+    private func publishWidget() {
+        let track = currentTrack.flatMap { library?.track($0.id) } ?? currentTrack
+        let artworkURL = track?.artwork.flatMap { name in library?.artworkDirectory.appendingPathComponent(name) }
+        widgetTask?.cancel()
+        widgetTask = Task {
+            if (try? await WidgetSnapshotStore.shared.publish(title: track?.title ?? "", artist: track?.artist ?? "", artwork: artworkURL)) == true {
+                WidgetCenter.shared.reloadTimelines(ofKind: CassetteWidgetConfiguration.kind)
+            }
+        }
+    }
     private func releaseAccess() { scopedRoot?.stopAccessingSecurityScopedResource(); scopedRoot = nil }
     func play() {
         guard let current = currentTrack, let track = library?.track(current.id), track.available else {
@@ -161,8 +179,12 @@ final class PlaybackCoordinator: ObservableObject {
                 try await PlaybackSession.shared.activate(true)
                 guard generation == playbackGeneration, playbackRequested else { return }
                 if engine.duration == 0 { let resume = position; try prepare(track); engine.seek(to: resume); duration = engine.duration; loadArtwork(track) }
-                if position >= duration { engine.seek(to: 0) }
+                if position >= duration { engine.seek(to: 0); recordedCurrentPlayback = false }
                 try engine.play(); isPlaying = engine.isPlaying; playbackRequested = isPlaying; position = engine.currentTime
+                if isPlaying && !recordedCurrentPlayback {
+                    library?.recordPlayback(track)
+                    recordedCurrentPlayback = true
+                }
                 startTimer(); updateNowPlaying()
             } catch {
                 guard generation == playbackGeneration else { return }

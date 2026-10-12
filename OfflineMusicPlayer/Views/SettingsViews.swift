@@ -16,7 +16,7 @@ enum AppIdentity {
         if let resource = Bundle.main.url(forResource: "Project", withExtension: "json"), let data = try? Data(contentsOf: resource),
            let metadata = try? JSONDecoder().decode([String: String].self, from: data), let value = metadata["githubURL"],
            let url = URL(string: value), url.scheme == "https", url.host == "github.com" { return url }
-        return URL(string: "https://github.com/sagnikb7/SoundBunker")!
+        return URL(string: "https://github.com/sagnikb7/casette")!
     }()
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—" }
     static var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—" }
@@ -41,6 +41,7 @@ struct SettingsView: View {
             }
             Section("Playback") {
                 Toggle("Remember Position", isOn: $rememberPosition).accessibilityLabel("Remember Playback Position")
+                NavigationLink("Widgets") { WidgetPreviewView() }
                 NavigationLink("Playback Preferences") { PlaybackSettingsView() }
                 Picker("Appearance", selection: $appearance) {
                     Text("System").tag("system")
@@ -55,7 +56,7 @@ struct SettingsView: View {
             Section("About") {
                 LabeledContentRow(label: "Version", value: "\(AppIdentity.version) (\(AppIdentity.build))")
                 NavigationLink("What's New") { WhatsNewView() }
-                NavigationLink("About SoundBunker") { AboutView() }
+                NavigationLink("About Cassette") { AboutView() }
                 Link("View Project on GitHub", destination: AppIdentity.projectURL)
             }
         }.listStyle(.insetGrouped).environment(\.defaultMinListRowHeight, 44)
@@ -161,7 +162,7 @@ struct WhatsNewView: View {
     var body: some View {
         List {
             if let notes = AppReleaseNotes.bundled {
-                Section { Text("SoundBunker \(notes.version)").font(.headline) }
+                Section { Text("Cassette \(notes.version)").font(.headline) }
                 ForEach(notes.sections.indices, id: \.self) { index in
                     Section(notes.sections[index].title) { ForEach(notes.sections[index].items, id: \.self) { Text($0).font(.subheadline) } }
                 }
@@ -172,12 +173,12 @@ struct WhatsNewView: View {
 struct AboutView: View {
     var body: some View {
         List {
-            Section { Text("SoundBunker").font(.title3.bold()); Text(AppIdentity.versionLabel).foregroundColor(.secondary); Text("Native, offline music for your iPod.").font(.subheadline) }
+            Section { Text("Cassette").font(.title3.bold()); Text(AppIdentity.versionLabel).foregroundColor(.secondary); Text("Native, offline music for your iPod.").font(.subheadline) }
             Section("Privacy") { Label("No accounts or tracking", systemImage: "checkmark.shield"); Text("Your library stays on your device. Music, album artwork and lyrics stay local. Optional artist photos use Wikipedia/Wikimedia: artist names and normal connection information are sent when Artists is opened. Disable Online Artist Photos in Settings to stop lookups. No music files are uploaded.").font(.subheadline).foregroundColor(.secondary) }
-            Section("Project") { Link("SoundBunker on GitHub", destination: AppIdentity.projectURL) }
+            Section("Project") { Link("Cassette on GitHub", destination: AppIdentity.projectURL) }
             Section("Artist Photos") { Text("Free images from Wikimedia, cached offline. Open a photo’s credit from its artist row for the creator, license and original image page.").font(.subheadline).foregroundColor(.secondary) }
             Section("Audio Formats") { Text("Native playback for local audio files. Availability depends on your iOS decoder and file encoding.").font(.subheadline); Text("MP3, M4A/AAC, ALAC, WAV and AIFF are native candidates. FLAC, Ogg and Opus may be unavailable.").font(.subheadline).foregroundColor(.secondary) }
-            Section("File Access") { Text("SoundBunker scans its own Files folder and folders you choose. iOS does not allow unrestricted access to every folder on the device.").font(.subheadline).foregroundColor(.secondary) }
+            Section("File Access") { Text("Cassette scans its own Files folder and folders you choose. iOS does not allow unrestricted access to every folder on the device.").font(.subheadline).foregroundColor(.secondary) }
         }.listStyle(.insetGrouped).navigationTitle("About").navigationBarTitleDisplayMode(.inline)
     }
 }

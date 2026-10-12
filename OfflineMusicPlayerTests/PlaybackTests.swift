@@ -4,6 +4,72 @@ import AVFoundation
 
 final class PlaybackTests: XCTestCase {
     @MainActor
+    func testHistoryRecordsSuccessfulStartsNotResumeRestoreOrFailure() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
+        let library = LibraryStore(documents: root, inMemory: true)
+        for name in ["A", "B"] { try FileManager.default.copyItem(at: fixture, to: root.appendingPathComponent(name + ".wav")) }
+        library.rescan(); try await waitForScan(library)
+        let engine = StubEngine()
+        let player = PlaybackCoordinator(engine: engine)
+        player.connect(library)
+        XCTAssertTrue(library.playbackHistory.isEmpty)
+        player.play(library.sortedTracks); try await waitForPlayback(player)
+        XCTAssertEqual(library.playbackHistory.count, 1)
+        player.pause(); player.play(); try await waitForPlayback(player)
+        XCTAssertEqual(library.playbackHistory.count, 1)
+        engine.onCompletion?(); try await waitForPlayback(player)
+        XCTAssertEqual(library.playbackHistory.map(\.trackID), library.sortedTracks.reversed().map(\.id))
+        player.setRepeatMode(.one)
+        engine.onCompletion?()
+        for _ in 0..<100 {
+            if library.playbackHistory.count == 3 { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(library.playbackHistory.count, 3, "Repeat-one records another completed-song replay")
+        player.pause(); player.persist()
+        let restored = PlaybackCoordinator(engine: StubEngine())
+        restored.connect(library)
+        XCTAssertEqual(library.playbackHistory.count, 3, "Silent restoration is not a play")
+        player.play(library.sortedTracks); player.pause()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(library.playbackHistory.count, 3, "Cancelled activation is not a play")
+        engine.failPlayback = true
+        player.play(library.sortedTracks)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(library.playbackHistory.count, 3, "Failed engine starts do not enter history")
+    }
+
+    @MainActor
+    func testHistoryKeepsTenRecentEventsFullHistoryAndPersistsToDisk() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let documents = root.appendingPathComponent("Files")
+        let store = root.appendingPathComponent("History.sqlite")
+        let library = LibraryStore(documents: documents, databaseURL: store)
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
+        try FileManager.default.copyItem(at: fixture, to: documents.appendingPathComponent("Song.wav"))
+        library.rescan(); try await waitForScan(library)
+        let track = try XCTUnwrap(library.sortedTracks.first)
+        for _ in 0..<12 { library.recordPlayback(track) }
+        XCTAssertEqual(library.recentlyPlayed.count, 10)
+        XCTAssertEqual(library.historySongs.count, 12)
+        XCTAssertEqual(Set(library.recentlyPlayed.map(\.id)).count, 10, "Repeated song plays have distinct row identities")
+        XCTAssertEqual(library.recentlyPlayed.map(\.id), Array(library.playbackHistory.prefix(10)).map(\.id))
+        let reopened = LibraryStore(documents: documents, databaseURL: store)
+        XCTAssertEqual(reopened.playbackHistory, library.playbackHistory)
+        XCTAssertEqual(reopened.historySongs.count, 12)
+        let source = try XCTUnwrap(reopened.sources.first)
+        reopened.setEnabled(source.id, enabled: false)
+        XCTAssertTrue(reopened.historySongs.isEmpty, "History follows folder visibility policy")
+        XCTAssertEqual(reopened.playbackHistory.count, 12, "Exclusion does not erase listening history")
+        reopened.setEnabled(source.id, enabled: true); try await waitForScan(reopened)
+        XCTAssertEqual(reopened.recentlyPlayed.count, 10)
+    }
+
+    @MainActor
     func testNativeFixtureAdvancesAndPauses() async throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
         let engine = NativeAudioEngine()
@@ -95,10 +161,11 @@ private final class StubEngine: AudioEngine {
     var duration: TimeInterval = 0
     var currentTime: TimeInterval = 0
     var isPlaying = false
+    var failPlayback = false
     var onCompletion: (() -> Void)?
     var onFailure: ((Error) -> Void)?
     func load(_ url: URL) throws { guard FileManager.default.fileExists(atPath: url.path) else { throw CocoaError(.fileReadNoSuchFile) }; duration = 12; currentTime = 0 }
-    func play() throws { isPlaying = true }
+    func play() throws { if failPlayback { throw PlaybackError.decoderFailed }; isPlaying = true }
     func pause() { isPlaying = false }
     func seek(to time: TimeInterval) { currentTime = min(max(0, time), duration) }
     func stop() { isPlaying = false; duration = 0 }

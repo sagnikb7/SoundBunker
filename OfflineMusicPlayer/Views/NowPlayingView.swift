@@ -13,7 +13,7 @@ struct MiniPlayer: View {
                 }.frame(minHeight: 52).contentShape(Rectangle())
             }.buttonStyle(VisualPressButtonStyle()).accessibilityLabel("Open Now Playing")
             Button { playback.toggle() } label: { Image(systemName: (playback.playbackRequested || playback.isPlaying) ? "pause.fill" : "play.fill").frame(width: 52, height: 52) }.accessibilityLabel((playback.playbackRequested || playback.isPlaying) ? "Pause" : "Play")
-            Button { playback.next() } label: { Image(systemName: "forward.fill").frame(width: 52, height: 52) }.accessibilityLabel("Next song")
+            SeekTransportButton(symbol: "forward.fill", label: "Next song", tap: { playback.next() }, seek: { playback.seek(to: playback.position + 2) }).frame(width: 52, height: 52)
         }.buttonStyle(VisualPressButtonStyle()).padding(.horizontal, 12).background(.regularMaterial)
             .overlay(alignment: .top) { Divider() }
     }
@@ -53,9 +53,11 @@ private struct NowPlayingContent: View {
                 GeometryReader { geometry in
                     if mode == .artwork {
                         ScrollView {
-                            let side = max(0, min(240, geometry.size.width, geometry.size.height - 16))
+                            let side = max(0, min(240, geometry.size.width, geometry.size.height - 40))
                             PlaybackArtworkView(reduceMotion: reduceMotion, track: currentTrack, side: side, isPlaying: playback.playbackRequested || playback.isPlaying)
-                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { playback.toggle() }
+                                .frame(maxWidth: .infinity).padding(.vertical, 20)
                                 .contentShape(Rectangle())
                                 .simultaneousGesture(DragGesture(minimumDistance: 24, coordinateSpace: .global).onEnded { value in
                                     guard value.startLocation.x > 32, abs(value.translation.width) > 50,
@@ -84,14 +86,7 @@ private struct NowPlayingContent: View {
         }
         .fullScreenCover(item: $destination) { route in
             NavigationView {
-                Group {
-                    switch route {
-                    case .artist(let name): SongListView(title: name, tracks: library.browse.artists[name] ?? [])
-                    case .album(let key):
-                        if let album = library.browse.albums.first(where: { $0.id == key }) { AlbumDetailView(album: album) }
-                        else { Text("Album is unavailable") }
-                    }
-                }.toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back to Player") { destination = nil } } }
+                SongDestinationContent(destination: route).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back to Player") { destination = nil } } }
                     .background(BackGestureSupport(rootBack: { destination = nil }))
             }.navigationViewStyle(.stack)
         }
@@ -127,14 +122,11 @@ private struct NowPlayingContent: View {
                 if let track = currentTrack {
                     Button("Go to Artist", systemImage: "person.fill") { destination = .artist(track.artist) }
                     Button("Go to Album", systemImage: "square.stack") { destination = .album(track.albumKey) }
-                    Button(isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: isFavorite ? "heart.slash" : "heart") { if let current = library.track(track.id) { library.favorite(current) } }
-                    Button("Play Next", systemImage: "text.insert") { playback.playNext(track) }
-                    Button("Add to Queue", systemImage: "text.badge.plus") { playback.addToQueue(track) }
                 }
                 Button("Add to Playlist", systemImage: "text.badge.plus") { playlistTrack = currentTrack }
                     .disabled(currentTrack == nil)
             } label: {
-                Image(systemName: "ellipsis").font(.title3)
+                Image(systemName: "ellipsis").font(.title3).foregroundColor(.white)
                     .frame(width: 52, height: 52, alignment: .trailing).contentShape(Rectangle())
             }.accessibilityLabel("Song options")
         }.frame(minHeight: 52)
@@ -146,16 +138,16 @@ private struct NowPlayingContent: View {
         VStack(spacing: 4) {
             metadata
             VStack(spacing: 0) {
-                Slider(value: Binding(get: { isScrubbing ? scrubPosition : playback.position }, set: { scrubPosition = $0 }), in: 0...max(playback.duration, 0.01), onEditingChanged: { editing in
+                CompactPlaybackSlider(value: Binding(get: { isScrubbing ? scrubPosition : playback.position }, set: { scrubPosition = $0 }), maximum: playback.duration, editingChanged: { editing in
                     if editing { scrubPosition = playback.position }; isScrubbing = editing
                     if !editing { playback.seek(to: scrubPosition) }
-                }).frame(minHeight: 44).accessibilityLabel("Playback position")
+                }).frame(height: 44).accessibilityLabel("Playback position")
                 HStack { Text(time(isScrubbing ? scrubPosition : playback.position)); Spacer(); Text("−" + time(max(0, playback.duration - playback.position))) }.font(.caption.monospacedDigit()).foregroundColor(.secondary)
             }
             HStack(spacing: 0) {
-                Button { playback.previous() } label: { Image(systemName: "backward.fill").font(.title2).frame(maxWidth: .infinity, minHeight: 72).contentShape(Rectangle()) }.accessibilityLabel("Previous song")
+                SeekTransportButton(symbol: "backward.fill", label: "Previous song", tap: { playback.previous() }, seek: { playback.seek(to: playback.position - 2) }).frame(maxWidth: .infinity).frame(height: 72)
                 Button { playback.toggle() } label: { Image(systemName: (playback.playbackRequested || playback.isPlaying) ? "pause.fill" : "play.fill").font(.system(size: 38)).frame(maxWidth: .infinity, minHeight: 72).contentShape(Rectangle()) }.accessibilityLabel((playback.playbackRequested || playback.isPlaying) ? "Pause" : "Play")
-                Button { playback.next() } label: { Image(systemName: "forward.fill").font(.title2).frame(maxWidth: .infinity, minHeight: 72).contentShape(Rectangle()) }.accessibilityLabel("Next song")
+                SeekTransportButton(symbol: "forward.fill", label: "Next song", tap: { playback.next() }, seek: { playback.seek(to: playback.position + 2) }).frame(maxWidth: .infinity).frame(height: 72)
             }.foregroundColor(.primary)
             HStack(spacing: 0) {
                 Button { mode = mode == .lyrics ? .artwork : .lyrics } label: {
@@ -180,21 +172,26 @@ private struct NowPlayingContent: View {
                         .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
                 }.accessibilityLabel(mode == .queue ? "Hide playing queue" : "Show playing queue").accessibilityValue(mode == .queue ? "Selected" : "")
             }
+            if let track = currentTrack {
+                Text(track.audioQualityLabel).font(.caption2).foregroundColor(.secondary)
+                    .lineLimit(1).frame(maxWidth: .infinity).accessibilityLabel("Audio quality: " + track.audioQualityLabel)
+            }
         }.buttonStyle(VisualPressButtonStyle()).fixedSize(horizontal: false, vertical: true).padding(.top, 4).padding(.bottom, 8)
     }
     private var queueView: some View {
         VStack(spacing: 4) {
             HStack(spacing: 0) {
-                Text("Playing Next").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                Text("Playing Next").font(.headline)
+                Spacer(minLength: 4)
                 Button { playback.toggleShuffle() } label: {
                     Image(systemName: "shuffle").frame(width: 52, height: 52).contentShape(Rectangle()).foregroundColor(playback.shuffle ? .blue : .secondary)
                 }.accessibilityLabel(playback.shuffle ? "Turn shuffle off" : "Turn shuffle on").accessibilityValue(playback.shuffle ? "On" : "Off")
                 Button { playback.cycleRepeat() } label: {
-                    Image(systemName: playback.repeatMode == .one ? "repeat.1" : "repeat").frame(width: 52, height: 52).contentShape(Rectangle()).foregroundColor(playback.repeatMode == .off ? .secondary : .blue)
+                    Image(systemName: playback.repeatMode == .one ? "repeat.1" : "repeat").frame(width: 44, height: 52, alignment: .trailing).contentShape(Rectangle()).foregroundColor(playback.repeatMode == .off ? .secondary : .blue)
                 }.accessibilityLabel("Repeat \(playback.repeatMode.rawValue)")
             }.buttonStyle(VisualPressButtonStyle())
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(playback.queue.enumerated()).filter { $0.offset > playback.queueIndex }, id: \.offset) { entry in
                         if let track = library.track(entry.element) {
                             Button { playback.jump(to: entry.offset) } label: {
@@ -202,7 +199,7 @@ private struct NowPlayingContent: View {
                                     ArtworkView(track: track).frame(width: 36, height: 36)
                                     Text(track.title).foregroundColor(.primary).lineLimit(1)
                                     Spacer(minLength: 0)
-                                }.frame(maxWidth: .infinity, minHeight: 52).contentShape(Rectangle())
+                                }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                             }.buttonStyle(VisualPressButtonStyle())
                         }
                     }

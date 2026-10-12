@@ -23,7 +23,7 @@ class PackagingTests(unittest.TestCase):
         (self.app / 'Player').write_bytes(b'Packaging fixture; not a device executable')
 
     def test_versioned_zip_contains_identical_versioned_ipa(self):
-        ipa = self.root / 'SoundBunker-unsigned-1.2.3.ipa'
+        ipa = self.root / 'Cassette-unsigned-1.2.3.ipa'
         result = subprocess.run([sys.executable, str(SCRIPT), str(self.app), str(ipa)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         with zipfile.ZipFile(ipa) as archive:
@@ -33,7 +33,7 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(archive.read(ipa.name), ipa.read_bytes())
 
     def test_wrong_filename_version_is_rejected_before_output(self):
-        ipa = self.root / 'SoundBunker-unsigned-9.9.9.ipa'
+        ipa = self.root / 'Cassette-unsigned-9.9.9.ipa'
         result = subprocess.run([sys.executable, str(SCRIPT), str(self.app), str(ipa)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('filename must include the built app version', result.stderr)

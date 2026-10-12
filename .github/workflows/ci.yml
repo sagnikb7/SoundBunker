@@ -1,4 +1,4 @@
-name: SoundBunker QA
+name: Cassette QA
 
 on:
   push:
@@ -47,10 +47,22 @@ jobs:
         run: |
           TASK_APP="$RUNNER_TEMP/Device/Build/Products/Release-iphoneos/OfflineMusicPlayer.app"
           TASK_VERSION=$(python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["CFBundleShortVersionString"])' "$TASK_APP/Info.plist")
-          TASK_IPA="dist/SoundBunker-unsigned-$TASK_VERSION.ipa"
+          TASK_IPA="dist/Cassette-unsigned-$TASK_VERSION.ipa"
           python3 scripts/package_ipa.py "$TASK_APP" "$TASK_IPA"
           python3 scripts/verify_repository.py --app "$TASK_APP" --ipa "$TASK_IPA"
           shasum -a 256 "$TASK_IPA" "$TASK_IPA.zip" > dist/SHA256SUMS
+      - name: Native Mac release package
+        run: |
+          xcodebuild -project OfflineMusicPlayer.xcodeproj -scheme OfflineMusicPlayer \
+            -configuration Release -destination 'platform=macOS,variant=Mac Catalyst' \
+            -derivedDataPath "$RUNNER_TEMP/MacRelease" ONLY_ACTIVE_ARCH=NO ARCHS='arm64 x86_64' \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual ENABLE_HARDENED_RUNTIME=NO build
+          TASK_APP="$RUNNER_TEMP/MacRelease/Build/Products/Release-maccatalyst/OfflineMusicPlayer.app"
+          TASK_VERSION=$(python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["CFBundleShortVersionString"])' "$TASK_APP/Contents/Info.plist")
+          TASK_MAC_APP="dist/Cassette-$TASK_VERSION-mac.app"
+          python3 scripts/package_mac.py "$TASK_APP" "$TASK_MAC_APP"
+          python3 scripts/verify_repository.py --platform mac --app "$TASK_MAC_APP" --mac-zip "$TASK_MAC_APP.zip"
+          shasum -a 256 "$TASK_MAC_APP.zip" >> dist/SHA256SUMS
       - name: Test results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -62,10 +74,17 @@ jobs:
       - name: Unsigned packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: SoundBunker-unsigned-${{ github.sha }}
+          name: Cassette-unsigned-${{ github.sha }}
           path: |
-            dist/SoundBunker-unsigned-*.ipa
-            dist/SoundBunker-unsigned-*.ipa.zip
+            dist/Cassette-unsigned-*.ipa
+            dist/Cassette-unsigned-*.ipa.zip
             dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+      - name: Local Mac app archive
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: Cassette-mac-${{ github.sha }}
+          path: dist/Cassette-*-mac.app.zip
           if-no-files-found: error
           retention-days: 14

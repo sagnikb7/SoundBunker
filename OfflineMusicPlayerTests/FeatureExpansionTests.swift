@@ -5,7 +5,7 @@ import Combine
 
 final class FeatureExpansionTests: XCTestCase {
     func testM3UParsingKeepsOrderAndDuplicatesButRejectsRemoteAndEscapingPaths() throws {
-        let root = URL(fileURLWithPath: "/tmp/SoundBunker-parser/Music")
+        let root = URL(fileURLWithPath: "/tmp/Cassette-parser/Music")
         let playlist = root.appendingPathComponent("Lists/Mix.m3u8")
         let input = "\u{feff}#EXTM3U\r\n../A.wav\r\n#EXTINF:12,A\n../B.wav\n../A.wav\nhttps://example.invalid/a.mp3\n../../../outside.wav\nfile://remote-server/tmp/a.wav\n../Missing.wav"
         let result = try M3UParser.parse(Data(input.utf8), playlist: playlist, root: root)
@@ -159,6 +159,6 @@ final class FeatureExpansionTests: XCTestCase {
         try await Task.sleep(nanoseconds: 300_000_000)
         host.view.layoutIfNeeded()
         let rendered = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in host.view.drawHierarchy(in: bounds, afterScreenUpdates: true) }
-        try XCTUnwrap(rendered.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-synced-lyrics.png"))
+        try XCTUnwrap(rendered.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-synced-lyrics.png"))
     }
 }

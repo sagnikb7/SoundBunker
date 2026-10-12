@@ -1,10 +1,56 @@
-# SoundBunker changelog
+# Cassette changelog
 
 Every user-facing feature or fix is recorded here when its release build succeeds. Pending changes and their intended semantic bump are maintained in `release/version.json`; see [versioning](../build/versioning.md).
 
 ## Unreleased
 
 The build workflow moves pending feature/fix notes into a dated release section after successful packaging.
+
+## 1.4.1 — 13 October 2026
+
+Build: 11.
+
+### Changed
+
+- Refresh Cassette project branding with the production logo, polished README badges and screenshots, current release details and clearly separated historical documentation.
+
+## 1.4.0 — 13 October 2026
+
+Build: 10.
+
+### Added
+
+- Recently Played shows the last ten song plays with artwork and opens a persistent full listening history.
+
+### Changed
+
+- Album artwork casts a playback shadow; mini-player and tab bar use matching translucency.
+- Larger Now Playing seek handle and touch-and-hold seeking on transport controls.
+- Library category and playlist song counts align to the right of each list row.
+- Folder Settings show live rescan counts, including small folders and skipped files, accumulated across sources.
+- Double-tap Now Playing album art to play or pause.
+
+## 1.3.0 — 12 October 2026
+
+Build: 9.
+
+### Added
+
+- Now Playing displays cached audio codec/format and bitrate when available.
+- All song-row menus offer Go to Artist and Go to Album.
+- Square and horizontal Cassette home-screen widgets display a shared local last-played snapshot and open the player on iOS 15.
+- Explicit build --platform=ipod/mac commands export versioned iPod IPA/ZIP or a local universal Mac .app/ZIP with platform-aware validation and release tracking.
+
+### Changed
+
+- Smaller Now Playing seek thumb retains a 44-point scrub target; options icon is white and redundant player menu actions are removed.
+- Playing Next uses denser rows and right-aligned shuffle/repeat controls. Timed lyrics use compact rows and always auto-follow without a Follow button.
+- Rebrand SoundBunker to Cassette with an original cassette icon, preserving bundle identity and private storage paths; project link follows renamed origin.
+
+### Fixed
+
+- External folder additions/removals serialize safely against scans and retain picker access through initial scanning; removal is available in source details and swipe actions.
+- Files/Finder sharing is verified and a non-audio transfer guide makes the app Documents folder discoverable from first launch.
 
 ## 1.2.0 — 12 October 2026
 

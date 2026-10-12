@@ -69,7 +69,7 @@ actor ArtistPhotoStore {
         guard preferences.object(forKey: "artistPhotosEnabled") as? Bool ?? true else { throw CancellationError() }
         lastRequest = Date()
         var request = URLRequest(url: url)
-        request.setValue("SoundBunker/\(AppIdentity.version) (\(AppIdentity.projectURL.absoluteString))", forHTTPHeaderField: "User-Agent")
+        request.setValue("Cassette/\(AppIdentity.version) (\(AppIdentity.projectURL.absoluteString))", forHTTPHeaderField: "User-Agent")
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               response.url?.scheme == "https", ["en.wikipedia.org", "upload.wikimedia.org", "thumb.wikimedia.org"].contains(response.url?.host ?? "") else { throw URLError(.badServerResponse) }

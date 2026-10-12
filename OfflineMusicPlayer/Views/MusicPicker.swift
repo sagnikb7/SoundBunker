@@ -11,7 +11,7 @@ struct MusicPicker: UIViewControllerRepresentable {
         picker.allowsMultipleSelection = !folders; picker.delegate = context.coordinator
         return picker
     }
-    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
+    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) { context.coordinator.parent = self }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
         var parent: MusicPicker

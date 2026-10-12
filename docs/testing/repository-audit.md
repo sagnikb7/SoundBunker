@@ -1,5 +1,7 @@
 # Pre-push audit and QA
 
+> Historical verification recorded before the Cassette rebrand. For the current release, see the [latest build receipt](verification/final-build.md).
+
 Date: 12 October 2026. Scope: SoundBunker 1.2.0 (8), native source, persistence, folder restrictions, M3U playlists, artist metadata, playback, release/package scripts, project contents and CI configuration.
 
 ## Findings resolved

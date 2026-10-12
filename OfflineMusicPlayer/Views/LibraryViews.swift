@@ -35,6 +35,7 @@ struct SongRow: View {
     @EnvironmentObject private var playback: PlaybackCoordinator
     var track: Track
     var play: () -> Void
+    @State private var destination: PlayerDestination?
     var body: some View {
         HStack(spacing: 12) {
             Button(action: play) {
@@ -48,6 +49,8 @@ struct SongRow: View {
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }.buttonStyle(VisualPressButtonStyle())
             Menu {
+                Button("Go to Artist", systemImage: "person.fill") { destination = .artist(track.artist) }
+                Button("Go to Album", systemImage: "square.stack") { destination = .album(track.albumKey) }
                 Button("Play Next", systemImage: "text.insert") { playback.playNext(track) }
                 Button("Add to Queue", systemImage: "text.badge.plus") { playback.addToQueue(track) }
                 Button(track.favorite ? "Remove Favorite" : "Add to Favorites", systemImage: track.favorite ? "heart.slash" : "heart") { library.favorite(track) }
@@ -62,6 +65,11 @@ struct SongRow: View {
                 }
             } label: { Image(systemName: "ellipsis").foregroundColor(.secondary).frame(width: 44, height: 44) }.accessibilityLabel("More options for \(track.title)")
         }.listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 8))
+            .background {
+                NavigationLink(isActive: Binding(get: { destination != nil }, set: { if !$0 { destination = nil } })) {
+                    if let destination = destination { SongDestinationContent(destination: destination) }
+                } label: { EmptyView() }.hidden()
+            }
     }
 }
 
@@ -206,5 +214,55 @@ struct FolderContentsView: View {
             ForEach(songs) { track in SongRow(track: track) { playback.play(songs, startingAt: track) } }
             if entries.isEmpty { Text("No indexed audio in this folder.").foregroundColor(.secondary) }
         }.listStyle(.plain).navigationTitle(path.isEmpty ? source.name : String(path.dropLast()).components(separatedBy: "/").last ?? source.name).navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Shared destinations keep song menus consistent across albums, playlists, search and the player.
+struct SongDestinationContent: View {
+    @EnvironmentObject private var library: LibraryStore
+    var destination: PlayerDestination
+    @ViewBuilder var body: some View {
+        switch destination {
+        case .artist(let name): SongListView(title: name, tracks: library.browse.artists[name] ?? [])
+        case .album(let key):
+            if let album = library.browse.albums.first(where: { $0.id == key }) { AlbumDetailView(album: album) }
+            else { Text("Album is unavailable") }
+        }
+    }
+}
+
+
+struct RecentlyPlayedTile: View {
+    @EnvironmentObject private var playback: PlaybackCoordinator
+    var track: Track
+    var body: some View {
+        Button { playback.play([track]) } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                ArtworkView(track: track).aspectRatio(1, contentMode: .fit)
+                Text(track.title).font(.subheadline.weight(.semibold)).foregroundColor(.primary).lineLimit(1)
+                Text(track.artist).font(.footnote).foregroundColor(.secondary).lineLimit(1)
+            }
+        }.buttonStyle(.plain).accessibilityLabel("Play \(track.title) by \(track.artist)")
+    }
+}
+
+struct ListeningHistoryView: View {
+    @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var playback: PlaybackCoordinator
+    var body: some View {
+        Group {
+            if library.historySongs.isEmpty {
+                EmptyLibraryView(symbol: "clock", title: "No listening history yet", detail: "Songs you play will appear here, with the most recent first.")
+            } else {
+                List {
+                    ForEach(library.historySongs) { song in
+                        VStack(alignment: .leading, spacing: 2) {
+                            SongRow(track: song.track) { playback.play([song.track]) }
+                            Text(song.entry.playedAt, style: .date) + Text(" · ") + Text(song.entry.playedAt, style: .time)
+                        }.font(.caption).foregroundColor(.secondary)
+                    }
+                }.listStyle(.plain)
+            }
+        }.navigationTitle("Listening History").navigationBarTitleDisplayMode(.inline)
     }
 }

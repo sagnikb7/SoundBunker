@@ -16,7 +16,7 @@ Search currently filters the loaded local index. Larger-library indexed SQL sear
 
 ## File access and offline policy
 
-The app scans its entire Documents directory automatically; it appears as SoundBunker under On My iPod. No Music subfolder is required. External roots are explicitly selected through UIDocumentPickerViewController, saved as bookmarks and resolved on subsequent opens. Security scope is balanced during scanning and held for the active track until replacement. Readable stale bookmark locations remain usable; unavailable locations request reconnection. Resolved roots are cached and invalidated on reconnection/removal.
+The app scans its entire Documents directory automatically; it appears as Cassette under On My iPod. No Music subfolder is required. External roots are explicitly selected through UIDocumentPickerViewController, saved as bookmarks and resolved on subsequent opens. Security scope is balanced during scanning and held for the active track until replacement. Readable stale bookmark locations remain usable; unavailable locations request reconnection. Resolved roots are cached and invalidated on reconnection/removal.
 
 Reading/copying provider audio uses NSFileCoordinator. Explicitly selected provider folders are allowed; the previous pathname-based rejection is removed. Cloud-only ubiquitous audio and symbolic links are refused before decoding. Directory placeholders may be enumerated to discover downloaded children. Third-party providers retain control over file availability; download audio in Files first. Arbitrary device-wide access and remote audio streaming are not implemented.
 
@@ -57,3 +57,23 @@ M3U discovery shares the scan pass and caches manifest parsing by file fingerpri
 BrowseIndex caches albums, artists, genres and recent lists. PlaybackClock alone publishes elapsed time, so library consumers do not redraw for progress ticks. PlaybackSession serializes blocking activation away from the UI; a generation token prevents a canceled request from starting audio later. Artwork responds to requested playback, using a bounded 180 ms transform. Only visible timed lyrics use the faster clock and binary-search line lookup.
 
 The metadata layer, network boundaries, attribution, cache/backoff and project link derivation are documented in [metadata and playlists](metadata-and-playlists.md).
+
+## Player and folder refinements (1.2.1 candidate)
+
+The seek control uses a 10-point UIKit thumb with a 44-point scrubbing surface; its cached image is built once. Queue rows retain 44-point targets with no extra spacing; lyric rows use compact intrinsic text sizing (32-point minimum), including wrapping for larger text, and always follow timestamp changes. The redundant player menu actions are removed while all shared song rows support artist/album navigation.
+
+Folder mutations acquire/save picker grants immediately, cancel any current scan, then apply after the task unwinds. Initial grants remain held until the new scan ends; later access resolves saved bookmarks. Removal persists source/location changes while retaining track identity, favorites and playlist references. It never deletes user audio. Source details and swipe actions expose explicit removal.
+
+## Player/library polish — 12 October 2026
+
+The tab bar explicitly uses UIKit system material for both standard and scroll-edge backgrounds, matching the mini-player’s SwiftUI regular material. Now Playing gives the artwork shadow room inside its scroll region; Reduce Motion uses static artwork scale/shadow. The scrubber has a 24-point visible thumb and a 44-point touch surface.
+
+Transport controls arbitrate tap versus hold with a native long-press recognizer. A 0.4-second hold seeks two seconds immediately and every 0.25 seconds thereafter. Existing seek bounds apply without changing songs. Release/cancellation, view teardown and app inactivity stop repetition; VoiceOver has explicit seek actions.
+
+Scanning reports a lightweight checked-audio count after each attempted audio file independently of the 25-track persistence batches. LibraryStore adds each source’s count to the completed-source count so totals do not reset between folders. Shared scan status/cancel UI is present on Settings, Music Folders and folder detail. Library home category counts use the corresponding visible/browse/source collections.
+
+## Listening history
+
+Successful engine starts create individual Codable `PlaybackHistoryEntry` records (`history` kind) in the existing LibraryRecord store, without changing its schema, identity or default database path. Each event has its own UUID, track ID and timestamp. New song loads, explicit replays, automatic queue transitions and repeat-one starts record events; pause/resume within a load does not. Silent restore, cancelled activation and failed starts do not record. History resolves current track metadata/artwork and follows source visibility policy; rescanning or exclusion does not delete stored events.
+
+Library displays the newest ten visible events as horizontal song tiles. The Recently Played category and header chevron open the full Listening History list, newest first, with repeated plays preserved and timestamps. Tiles/rows play their selected song. Older installations begin with an empty history; no history is fabricated from import dates or saved queue state. An optional databaseURL initializer argument supports isolated disk-persistence verification; the default path stays unchanged.

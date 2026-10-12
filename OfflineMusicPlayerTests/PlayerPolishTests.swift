@@ -5,6 +5,45 @@ import Combine
 
 final class PlayerPolishTests: XCTestCase {
     @MainActor
+    func testRecentlyPlayedAndHistoryRenderAtCompactWidth() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = LibraryStore(documents: root, inMemory: true)
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
+        for name in ["A Song With A Long Title", "Another Song", "Final Song"] {
+            try FileManager.default.copyItem(at: fixture, to: root.appendingPathComponent(name + ".wav"))
+        }
+        library.rescan(); try await waitForScan(library)
+        for track in library.sortedTracks { library.recordPlayback(track) }
+        let playback = PlaybackCoordinator(); playback.connect(library)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let parent = try XCTUnwrap(scene.windows.first { $0.isKeyWindow }?.rootViewController)
+        for (name, content) in [("library", AnyView(LibraryHomeView())), ("history", AnyView(ListeningHistoryView()))] {
+            let host = UIHostingController(rootView: NavigationView { content }.navigationViewStyle(.stack).environmentObject(library).environmentObject(playback))
+            parent.addChild(host); parent.view.addSubview(host.view); host.didMove(toParent: parent)
+            host.overrideUserInterfaceStyle = .light
+            let bounds = CGRect(x: 0, y: 0, width: 320, height: 548)
+            host.view.frame = bounds
+            host.beginAppearanceTransition(true, animated: false); host.endAppearanceTransition()
+            host.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 250_000_000)
+            let format = UIGraphicsImageRendererFormat(); format.scale = 1
+            let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in host.view.drawHierarchy(in: bounds, afterScreenUpdates: true) }
+            try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-recent-\(name)-320x548.png"))
+            if name == "library" {
+                // Catalyst hosts the List in a native scroll surface. A taller capture
+                // shows its below-the-fold section while keeping the iPod's 320-point width.
+                let expanded = CGRect(x: 0, y: 0, width: 320, height: 820)
+                host.view.frame = expanded; host.view.layoutIfNeeded()
+                try await Task.sleep(nanoseconds: 250_000_000)
+                let fullLibrary = UIGraphicsImageRenderer(bounds: expanded, format: format).image { _ in host.view.drawHierarchy(in: expanded, afterScreenUpdates: true) }
+                try XCTUnwrap(fullLibrary.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-recent-library-320x820.png"))
+            }
+            host.willMove(toParent: nil); host.view.removeFromSuperview(); host.removeFromParent()
+        }
+    }
+
+    @MainActor
     func testPlaylistAddIsIdempotentAndPersistsAcrossMultiplePlaylists() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -105,7 +144,7 @@ final class PlayerPolishTests: XCTestCase {
         let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
         }
-        try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-settings-320x548.png"))
+        try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-settings-320x548.png"))
     }
 
     @MainActor
@@ -125,7 +164,7 @@ final class PlayerPolishTests: XCTestCase {
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
         }
         XCTAssertEqual(image.size.width, 320); XCTAssertEqual(image.size.height, 548)
-        try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-320x548.png"))
+        try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-player-320x548.png"))
 
         // Also inspect the two-line header and wrapped metadata without starting playback.
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
@@ -145,7 +184,7 @@ final class PlayerPolishTests: XCTestCase {
                 populatedHost.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
             }
             let name = mode == .artwork ? "populated" : mode == .queue ? "queue" : "lyrics"
-            try XCTUnwrap(populated.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-\(name)-320x548.png"))
+            try XCTUnwrap(populated.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-player-\(name)-320x548.png"))
         }
 
         defer { restored.pause() }
@@ -158,7 +197,7 @@ final class PlayerPolishTests: XCTestCase {
             let rendered = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
                 motionHost.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
             }
-            try XCTUnwrap(rendered.pngData()).write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-\(name)-320x548.png"))
+            try XCTUnwrap(rendered.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-player-\(name)-320x548.png"))
         }
 
         // The system accessibility environment is read-only; render the same artwork policy directly.
@@ -176,6 +215,6 @@ final class PlayerPolishTests: XCTestCase {
             reducedImages.append(try XCTUnwrap(rendered.pngData()))
         }
         XCTAssertEqual(reducedImages[0], reducedImages[1], "Reduce Motion must keep artwork geometry identical on play/pause")
-        try reducedImages[0].write(to: URL(fileURLWithPath: "/tmp/SoundBunker-player-reduced-motion.png"))
+        try reducedImages[0].write(to: URL(fileURLWithPath: "/tmp/Cassette-player-reduced-motion.png"))
     }
 }

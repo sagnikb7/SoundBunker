@@ -23,9 +23,11 @@ enum LocalFilePolicy {
 
     static func check(_ url: URL) throws {
         guard url.isFileURL else { throw CocoaError(.fileReadUnsupportedScheme) }
-        let values = try url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .isSymbolicLinkKey, .isDirectoryKey])
-        guard values.isSymbolicLink != true else { throw CocoaError(.fileReadNoPermission) }
-        if values.isDirectory != true && values.isUbiquitousItem == true && values.ubiquitousItemDownloadingStatus != .current && values.ubiquitousItemDownloadingStatus != .downloaded {
+        let basic = try url.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+        guard basic.isSymbolicLink != true else { throw CocoaError(.fileReadNoPermission) }
+        if basic.isDirectory == true { return }
+        let values = try url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
+        if values.isUbiquitousItem == true && values.ubiquitousItemDownloadingStatus != .current && values.ubiquitousItemDownloadingStatus != .downloaded {
             throw NSError(domain: "PocketMusic", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cloud-only file skipped. Download it in Files before adding it."])
         }
 
@@ -36,10 +38,18 @@ actor LibraryScanner {
     private var manifestCache: [String: (fingerprint: String, result: M3UParseResult)] = [:]
     static let extensions: Set<String> = ["mp3", "m4a", "aac", "alac", "wav", "aiff", "aif", "flac", "ogg", "opus"]
     func scan(root: URL, sourceID: UUID, existing: [String: Track], cache: URL, excluded: [String] = [],
+              checked: @escaping @Sendable (Int) async -> Void = { _ in },
               progress: @escaping @Sendable ([Track], Int) async -> Void) async throws -> ScanResult {
         let scanRoot = root.resolvingSymlinksInPath().standardizedFileURL
-        try LocalFilePolicy.check(scanRoot)
-        guard FileManager.default.isReadableFile(atPath: scanRoot.path) else { throw CocoaError(.fileReadNoPermission) }
+        try LocalFilePolicy.check(root)
+        // POSIX isReadableFile can reject provider-backed folders before coordination.
+        // Ask the provider for a directory read while the selected security scope is held.
+        var coordinationError: NSError?, directoryError: Error?
+        NSFileCoordinator().coordinate(readingItemAt: root, options: .withoutChanges, error: &coordinationError) { coordinatedRoot in
+            do { _ = try FileManager.default.contentsOfDirectory(at: coordinatedRoot, includingPropertiesForKeys: nil) }
+            catch { directoryError = error }
+        }
+        if let error = coordinationError ?? (directoryError as NSError?) { throw error }
         var issues: [String] = []
         guard let enumerator = FileManager.default.enumerator(at: scanRoot,
             includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey, .volumeIdentifierKey, .fileSizeKey, .contentModificationDateKey],
@@ -50,6 +60,7 @@ actor LibraryScanner {
         var tracks: [Track] = [], batch: [Track] = [], seen = Set<String>(), skipped = 0, count = 0
         while let file = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
+            let previousCount = count
             do {
                 let relativePath = String(file.resolvingSymlinksInPath().path.dropFirst(scanRoot.path.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 if excluded.contains(where: { relativePath == $0 || relativePath.hasPrefix($0 + "/") }) { enumerator.skipDescendants(); continue }
@@ -86,7 +97,7 @@ actor LibraryScanner {
                     fingerprint += ":lrc:\(lyricAttributes.fileSize ?? 0):\(lyricAttributes.contentModificationDate?.timeIntervalSince1970 ?? 0)"
                 }
                 var track: Track
-                if let previous = existing[identity], previous.fingerprint == fingerprint { track = previous }
+                if let previous = existing[identity], previous.fingerprint == fingerprint, previous.audioFormat != nil { track = previous }
                 else {
                     track = try await metadata(file, id: identity, fingerprint: fingerprint, cache: cache)
                     if let previous = existing[identity] { track.added = previous.added; track.favorite = previous.favorite; track.locations = previous.locations }
@@ -99,8 +110,10 @@ actor LibraryScanner {
                 if batch.count == 25 { await progress(batch, count); batch.removeAll() }
             } catch is CancellationError { throw CancellationError() }
             catch { skipped += 1; if issues.count < 20 { issues.append("\(file.lastPathComponent): \(error.localizedDescription)") } }
+            if count > previousCount { await checked(count) }
         }
         if !batch.isEmpty { await progress(batch, count) }
+        await checked(count)
         return ScanResult(tracks: tracks, seen: seen, skipped: skipped, issues: issues, playlists: playlists)
     }
 
@@ -116,6 +129,48 @@ actor LibraryScanner {
         let items = (try? await asset.load(.metadata)) ?? []
         if !duration.isFinite || duration <= 0, let audio = try? AVAudioFile(forReading: url) {
             duration = Double(audio.length) / audio.processingFormat.sampleRate
+        }
+        var format = url.pathExtension.uppercased()
+        var bitrate: Int?
+        var stream: AudioStreamBasicDescription?
+        if let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
+            if let rate = try? await audioTrack.load(.estimatedDataRate), rate.isFinite && rate > 0 { bitrate = Int(rate.rounded()) }
+            if let descriptions = try? await audioTrack.load(.formatDescriptions), let description = descriptions.first {
+                stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee
+            }
+        }
+        // Some native WAV/AIFF decoders expose no AVAsset audio track on Catalyst.
+        // AudioToolbox reads the encoded file header without decoding the song or including cover bytes in bitrate.
+        if stream == nil || bitrate == nil {
+            var file: AudioFileID?
+            if AudioFileOpenURL(url as CFURL, .readPermission, 0, &file) == noErr, let file = file {
+                defer { AudioFileClose(file) }
+                if stream == nil {
+                    var description = AudioStreamBasicDescription()
+                    var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+                    if AudioFileGetProperty(file, kAudioFilePropertyDataFormat, &size, &description) == noErr { stream = description }
+                }
+                if bitrate == nil {
+                    var rate: UInt32 = 0
+                    var size = UInt32(MemoryLayout<UInt32>.size)
+                    if AudioFileGetProperty(file, kAudioFilePropertyBitRate, &size, &rate) == noErr, rate > 0 { bitrate = Int(rate) }
+                }
+            }
+        }
+        if let stream = stream {
+            switch stream.mFormatID {
+            case kAudioFormatMPEGLayer3: format = "MP3"
+            case kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2: format = "AAC"
+            case kAudioFormatAppleLossless: format = "ALAC"
+            case kAudioFormatLinearPCM:
+                format = "\(url.pathExtension.uppercased()) / PCM"
+                if bitrate == nil && stream.mSampleRate.isFinite && stream.mSampleRate > 0 && stream.mBytesPerFrame > 0 {
+                    bitrate = Int(stream.mSampleRate * Double(stream.mBytesPerFrame) * 8)
+                }
+            case kAudioFormatFLAC: format = "FLAC"
+            case kAudioFormatOpus: format = "Opus"
+            default: break
+            }
         }
         func value(_ key: AVMetadataKey) -> String? {
             items.first { $0.commonKey == key }?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -148,6 +203,6 @@ actor LibraryScanner {
                      album: album, genre: tag(["genre", "TCON"]) ?? "Unknown Genre", duration: duration.isFinite ? duration : 0,
                      trackNumber: Int((tag(["trackNumber", "TRCK"]) ?? "0").components(separatedBy: "/")[0]) ?? 0,
                      discNumber: Int((tag(["discNumber", "TPOS"]) ?? "0").components(separatedBy: "/")[0]) ?? 0,
-                     fingerprint: fingerprint, artwork: artwork, lyrics: lyrics, locations: [], added: Date())
+                     fingerprint: fingerprint, artwork: artwork, lyrics: lyrics, locations: [], added: Date(), audioFormat: format, bitrate: bitrate)
     }
 }

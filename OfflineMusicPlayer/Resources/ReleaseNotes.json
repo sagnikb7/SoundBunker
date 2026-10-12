@@ -1,28 +1,10 @@
 {
-  "version": "1.2.0",
+  "version": "1.4.1",
   "sections": [
-    {
-      "title": "Added",
-      "items": [
-        "Automatic local M3U/M3U8 playlist discovery, ordered entries and unresolved-file feedback.",
-        "Optional cached artist photos from Wikimedia with attribution and privacy controls.",
-        "GitHub project link derived from the origin remote.",
-        "Song-menu artist/album navigation, artwork swipe navigation and modal edge-back support.",
-        "Smooth compact timed lyrics with auto-follow and manual-scroll pause."
-      ]
-    },
     {
       "title": "Changed",
       "items": [
-        "Cached album/artist/genre browsing and throttled foreground scans.",
-        "Faster bounded animations and a lyrics clock that runs faster only when lyrics are visible."
-      ]
-    },
-    {
-      "title": "Fixed",
-      "items": [
-        "Removed blanket File Provider Storage rejection for folders selected in Files.",
-        "Playback-request artwork feedback starts before asynchronous audio-session activation."
+        "Refresh Cassette project branding with the production logo, polished README badges and screenshots, current release details and clearly separated historical documentation."
       ]
     }
   ]

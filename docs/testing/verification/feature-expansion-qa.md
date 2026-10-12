@@ -1,5 +1,7 @@
 # Feature expansion QA
 
+> Historical verification recorded before the Cassette rebrand. For the current release, see the [latest build receipt](final-build.md).
+
 Date: 12 October 2026. Packaged release: **1.2.0 (8)**. Release IPA and ZIP passed integrity/device-resource validation; release notes are finalized in the manifest and changelog. See [build receipt](final-build.md).
 
 ## Executed checks

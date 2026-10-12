@@ -4,7 +4,7 @@ Source requirements: [product specification](../product/offline-music-player-spe
 
 ## Delivered implementation
 
-- Native iOS 15-targeted Xcode app, branded SoundBunker with an app icon; no shipped demo/test audio.
+- Native iOS 15-targeted Xcode app, branded Cassette with an app icon; no shipped demo/test audio.
 - Library home, songs, albums/details, artists, genres, source/folder browsing, search, playlists/favorites, Settings, mini-player and full-screen Now Playing based on the supplied prototype.
 - Core Data index, app-owned Documents scan, external folder bookmarks, file import, cancellation/progress, fingerprints, overlapping-root identities and unavailable-file preservation.
 - Automatic scan on opening/foreground; persisted source disable switches and subfolder exclusions.
@@ -36,3 +36,42 @@ Pinned Now Playing control dock, cached rotated artwork surface tint, duplicate-
 ## 1.2.0 packaged implementation
 
 Automatic ordered M3U/M3U8 imports and unresolved-entry display; selected File Provider folder support; GitHub links derived from origin; optional cached/attributed artist photos; compact followed lyrics; artist/album song-menu navigation; artwork next/previous swipes; native navigation/modal edge-back support. Foreground scans are throttled, browse groups cached, cache trimming moved off the UI thread, playback activation serialized off the main actor, and progress publication isolated from library consumers. See [feature QA](../testing/verification/feature-expansion-qa.md). Device interaction/performance certification remains pending.
+
+## Player/folder refinements (included in the 1.3.0 release)
+
+Smaller scrubber/stream metadata footer, simplified white player options, song-row destinations, compact queue controls/lyrics and always-follow lyrics. Folder mutations serialize against scans, the first picker grant is retained, and external removal is available in detail/swipe actions. Files/Finder sharing has a first-launch guide and validation. See [player/folder QA](../testing/verification/player-folder-qa.md). Packaged in 1.3.0; physical device certification remains pending.
+
+## Cassette 1.3.0 packaged release
+
+New cassette-tape icon/name, retained persistence identity, renamed origin project link and native square/horizontal WidgetKit extension. Shared snapshots are bounded and event-driven; deep links open player/library without autoplay. Catalyst renders verify the shared content; extension compilation/embedding is checked on iPhoneOS. Signed installation/App Group updates remain device QA. See [widget receipt](../design/cassette-widgets.md).
+
+Both `./build --platform=ipod` and `./build --platform=mac` passed end-to-end validation with the same 1.3.0 (9). README badges/commands and platform release tracking are implemented. See [final build receipt](../testing/verification/final-build.md).
+
+## Player and library polish task list — 12 October 2026
+
+- [x] Add a playback shadow behind Now Playing album art, with space for the shadow. Reduce Motion keeps a static shadow and artwork scale.
+- [x] Use the same regular/system material for the mini-player and bottom tab bar, including the tab bar’s scroll-edge appearance.
+- [x] Enlarge the seek thumb from 10 to 24 points while preserving the 44-point touch surface and VoiceOver adjustment.
+- [x] Hold Next/Previous for 0.4 seconds to begin seeking two seconds every 0.25 seconds; short taps retain skip/restart behavior. Release, cancellation, leaving the player or app inactivity stops repeating. The mini-player Next button supports this too.
+- [x] Display Songs, Albums, Artists, Genres, Folders and Recently Added counts beside their Library titles, using the same data as their destinations.
+- [x] Show live scan status, checked-audio count and Cancel in Settings, Music Folders and folder detail. Count callbacks are independent of persistence batches and accumulate across sources, including files rejected during checking.
+- [ ] Complete physical iPod touch, translucency, drag and hold verification.
+
+## Recently Played task list — 12 October 2026
+
+- [x] Replace the Library Recently Added strip and category link with Recently Played.
+- [x] Keep the horizontal 112-point artwork tiles, spacing and title/artist typography; show the newest ten play events.
+- [x] Make the Recently Played title/chevron open a full Listening History screen with artwork, song actions and timestamps.
+- [x] Persist successful playback starts locally; retain repeat plays, exclude pause/resume duplicates, cancelled/failed starts and silent restoration.
+- [x] Keep history through folder rescans and exclusions; apply existing Library visibility rules when displaying songs.
+- [ ] Verify the Library/history navigation and tile interaction on the physical iPod.
+
+## Album-art double-tap — 12 October 2026
+
+- [x] Double-tap (double-click on Catalyst) the Now Playing artwork to toggle playback; single taps do nothing, and existing horizontal track swipes remain available.
+- [ ] Verify touch gesture behavior on the physical iPod.
+
+## List-count alignment — 12 October 2026
+
+- [x] Align every Library category count to the trailing edge, before the navigation chevron.
+- [x] Apply the same trailing-count alignment to playlist song counts.

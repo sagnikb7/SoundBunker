@@ -1,6 +1,6 @@
 """Package an unsigned iphoneos .app for re-signing with a sideloading tool.
 
-Usage: python3 scripts/package_ipa.py /path/to/OfflineMusicPlayer.app dist/SoundBunker-unsigned-1.1.4.ipa
+Usage: python3 scripts/package_ipa.py /path/to/OfflineMusicPlayer.app dist/Cassette-unsigned-1.1.4.ipa
 This does not create a provisioning profile or an installable development signature.
 """
 import argparse
@@ -29,8 +29,8 @@ if any(file.name.lower().startswith('testtone') for file in app.rglob('*')):
 version = info.get('CFBundleShortVersionString', '')
 if not re.fullmatch(r'\d+\.\d+\.\d+', version):
     parser.error('Built app must have a three-part release version')
-if args.output.name != f'SoundBunker-unsigned-{version}.ipa':
-    parser.error('IPA filename must include the built app version: SoundBunker-unsigned-' + version + '.ipa')
+if args.output.name != f'Cassette-unsigned-{version}.ipa':
+    parser.error('IPA filename must include the built app version: Cassette-unsigned-' + version + '.ipa')
 args.output.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(args.output, 'w', compression=zipfile.ZIP_DEFLATED) as ipa:
     for file in sorted(app.rglob('*')):

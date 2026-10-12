@@ -30,7 +30,9 @@ struct PlaylistsView: View {
             NavigationLink { SongListView(title: "Favorites", tracks: library.sortedTracks.filter(\.favorite)) } label: { Label("Favorites", systemImage: "heart.fill").foregroundColor(.pink) }
             ForEach(library.playlists) { playlist in NavigationLink { PlaylistDetailView(id: playlist.id) } label: {
                 HStack { Image(systemName: "music.note.list").font(.title2).foregroundColor(.blue).frame(width: 40, height: 44)
-                    VStack(alignment: .leading) { Text(playlist.name); Text("\(playlist.trackIDs.count) songs").font(.footnote).foregroundColor(.secondary) }
+                    Text(playlist.name)
+                    Spacer(minLength: 8)
+                    Text("\(playlist.trackIDs.count)").foregroundColor(.secondary).monospacedDigit()
                 }
             } }.onDelete { indices in indices.map { library.playlists[$0] }.forEach(library.deletePlaylist) }
             Button("New Playlist…") { creating = true }
@@ -109,14 +111,17 @@ struct SourceSettingsView: View {
                             Label(source.name, systemImage: "folder")
                             Text(source.needsReconnect ? "Reconnect required" : source.enabled ? "Scanning enabled" : "Excluded from scanning").font(.footnote).foregroundColor(.secondary)
                         }
+                    }.swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if !source.isOwned { Button("Remove", role: .destructive) { removing = source } }
                     }.contextMenu {
-                        Button("Rescan") { library.rescan(only: source.id) }
+                        Button("Rescan") { library.rescan(only: source.id) }.disabled(library.busy || !source.enabled)
                         if !source.isOwned { Button("Remove from Library", role: .destructive) { removing = source } }
                     }
                 }
                 Button("Add Music Folder…") { library.pickerRequest = PickerRequest(folders: true) }
+                if library.scanning { ScanProgressView() }
             } footer: {
-                Text("In Files, choose Browse → On My iPod and select a folder. iOS grants access to selected folders, not the entire device. SoundBunker’s own folder is scanned automatically. Source removal never deletes your audio.")
+                Text("In Files, choose Browse → On My iPod and select a folder. iOS grants access to selected folders, not the entire device. Cassette’s own folder is scanned automatically. Source removal never deletes your audio.")
             }
         }.navigationTitle("Music Folders").alert("Remove this source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button("Remove", role: .destructive) { if let source = removing { library.removeSource(source) }; removing = nil }
@@ -127,23 +132,38 @@ struct SourceSettingsView: View {
 struct SourceDetailView: View {
     @EnvironmentObject private var library: LibraryStore
     var id: UUID
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmingRemoval = false
     private var source: MusicSource? { library.sources.first { $0.id == id } }
     var body: some View {
         List {
             if let source = source {
                 Section {
                     Toggle("Scan this folder", isOn: Binding(get: { self.source?.enabled ?? false }, set: { library.setEnabled(id, enabled: $0) })).disabled(library.busy)
-                    Button("Rescan Folder") { library.rescan(only: id) }.disabled(library.scanning || !source.enabled)
+                    Button("Rescan Folder") { library.rescan(only: id) }.disabled(library.busy || !source.enabled)
+                    if library.scanning { ScanProgressView() }
                     if !source.isOwned { Button("Reconnect Folder…") { library.pickerRequest = PickerRequest(folders: true, reconnecting: id) } }
-                } footer: { Text(source.isOwned ? "Files → On My iPod → SoundBunker. All audio inside this app folder is found automatically; no Music subfolder is required." : "Keep this folder on your device. Cloud-only files are skipped.") }
+                } footer: { Text(source.isOwned ? "Files → On My iPod → Cassette. All audio inside this app folder is found automatically; no Music subfolder is required." : "Keep this folder on your device. Cloud-only files are skipped.") }
                 Section("Excluded Subfolders") {
                     ForEach(source.excludedPaths, id: \.self) { path in
                         HStack { Text(path).font(.subheadline); Spacer(); Button("Include") { library.includeFolder(id, path: path) }.disabled(library.busy) }
                     }
                     Button("Exclude a Folder…") { library.pickerRequest = PickerRequest(folders: true, excludeFrom: id) }.disabled(library.busy)
                 }
+                if !source.isOwned {
+                    Section {
+                        Button("Remove Folder from Library", role: .destructive) { confirmingRemoval = true }
+                    } footer: { Text("Removes this folder’s library access only. Your original audio, favorites and playlists are kept.") }
+                }
             }
         }.navigationTitle(source?.name ?? "Folder").navigationBarTitleDisplayMode(.inline)
+            .alert("Remove this folder?", isPresented: $confirmingRemoval) {
+                Button("Remove", role: .destructive) {
+                    if let source = source { library.removeSource(source) }
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Your audio files will not be deleted. Any scan in progress will finish cancelling before removal.") }
     }
 }
 

@@ -6,7 +6,7 @@ Reference: `offline-music-player-prototype/offline-music-player-prototype.html`,
 
 The implementation preserves four system tabs, compact artwork/song rows, large library titles, two-column album tiles, grouped Settings, source browsing, persistent mini-player and full-screen Now Playing with transport/seek/shuffle/repeat/queue/lyrics controls. System colors and Dynamic Type replace fixed CSS values; no HTML/webview is embedded.
 
-SoundBunker uses a blue field with original white sound bars sheltered by a bunker arch for its basic icon. Generated icon assets are native-code rendered and do not include copied prototype cover artwork. All displayed music/artwork/counts come from the local index. Unknown tags use readable fallbacks; the prototype's invented artists, albums and lyric lines are not shipped.
+Cassette now uses an original cassette-tape icon (ivory/coral on midnight navy/teal), generated with the built-in image tool and converted to an opaque 1024px static app asset. The original pre-rebrand icon/renderer is preserved in `assets/` as history. No prototype album artwork or demo music is shipped. Music/artwork/counts come from the local index; unknown tags use readable fallbacks.
 
 ## Product decisions
 

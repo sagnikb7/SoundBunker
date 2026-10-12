@@ -7,6 +7,7 @@ final class LibraryStore: ObservableObject {
         didSet { trackLookup = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); visibleCache = nil; sortedCache = nil; browseCache = nil }
     }
     @Published private(set) var sources: [MusicSource] = [] { didSet { visibleCache = nil; sortedCache = nil; browseCache = nil } }
+    @Published private(set) var playbackHistory: [PlaybackHistoryEntry] = []
     @Published private(set) var playlists: [MusicPlaylist] = []
     @Published private(set) var scanning = false
     @Published private(set) var clearingArtwork = false
@@ -27,8 +28,11 @@ final class LibraryStore: ObservableObject {
     private var artworkNeedsTrim = false
     private var lastScan = Date.distantPast
     private var resolvedRoots: [UUID: URL] = [:]
+    private enum FolderChange { case add(MusicSource, FolderAccess), remove(UUID) }
+    private var folderChanges: [FolderChange] = []
+    private var firstScanGrants: [UUID: FolderAccess] = [:]
 
-    init(documents: URL? = nil, inMemory: Bool = false) {
+    init(documents: URL? = nil, inMemory: Bool = false, databaseURL: URL? = nil) {
         let fm = FileManager.default
         #if targetEnvironment(macCatalyst)
         // Catalyst preview is app-specific even when launched with an ad-hoc signature without sandbox entitlements.
@@ -40,17 +44,33 @@ final class LibraryStore: ObservableObject {
         artworkDirectory = documents.map { $0.appendingPathComponent(".artwork", isDirectory: true) } ?? fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("PocketMusicArtwork", isDirectory: true)
         do {
             try fm.createDirectory(at: self.documents, withIntermediateDirectories: true)
+            // Files may hide an empty Documents container. A small useful guide makes it discoverable immediately.
+            let guide = self.documents.appendingPathComponent("Cassette Guide.txt")
+            if !fm.fileExists(atPath: guide.path) {
+                try """
+                Add music to Cassette
+
+                On your iPod: Files → Browse → On My iPod → Cassette.
+                Other apps can use the Files picker to copy audio into this folder.
+                On your Mac: connect and unlock the iPod, trust this computer, open Finder,
+                select the iPod → Files → Cassette, and drag your audio files into the app.
+                Music is scanned when Cassette opens. Use Settings → Rescan Library for immediate discovery.
+                Keep M3U playlists and LRC lyrics alongside the audio using their relative paths.
+                Your playlists and favorites are stored privately; deleting this guide does not affect them.
+                """.write(to: guide, atomically: true, encoding: .utf8)
+            }
             try fm.createDirectory(at: artworkDirectory, withIntermediateDirectories: true)
-            database = try LibraryDatabase(inMemory: inMemory)
+            database = try LibraryDatabase(inMemory: inMemory, storeURL: databaseURL)
             tracks = try database!.all("track", as: Track.self)
             trackLookup = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
             sources = try database!.all("source", as: MusicSource.self)
             playlists = try database!.all("playlist", as: MusicPlaylist.self)
-            for index in sources.indices where sources[index].isOwned && sources[index].name != "SoundBunker" {
-                sources[index].name = "SoundBunker"; try save(sources[index])
+            playbackHistory = try database!.all("history", as: PlaybackHistoryEntry.self).sorted { $0.playedAt > $1.playedAt }
+            for index in sources.indices where sources[index].isOwned && sources[index].name != "Cassette" {
+                sources[index].name = "Cassette"; try save(sources[index])
             }
             if !sources.contains(where: { $0.isOwned }) {
-                let source = MusicSource(id: UUID(), name: "SoundBunker", isOwned: true)
+                let source = MusicSource(id: UUID(), name: "Cassette", isOwned: true)
                 sources.insert(source, at: 0); try save(source)
             }
         } catch { errorMessage = "Couldn't open your library: \(error.localizedDescription)" }
@@ -67,6 +87,24 @@ final class LibraryStore: ObservableObject {
         let result = visibleTracks.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         sortedCache = result; return result
     }
+    var historySongs: [PlayedSong] {
+        let visible = Dictionary(uniqueKeysWithValues: visibleTracks.map { ($0.id, $0) })
+        return playbackHistory.compactMap { entry in
+            visible[entry.trackID].map { PlayedSong(entry: entry, track: $0) }
+        }
+    }
+    var recentlyPlayed: [PlayedSong] { Array(historySongs.prefix(10)) }
+
+    func recordPlayback(_ track: Track) {
+        guard trackLookup[track.id] != nil, let database = database else { return }
+        let entry = PlaybackHistoryEntry(trackID: track.id)
+        do {
+            try database.save(entry, key: "history:\(entry.id)", kind: "history")
+            try database.commit()
+            playbackHistory.insert(entry, at: 0)
+        } catch { errorMessage = "Couldn't save listening history: \(error.localizedDescription)" }
+    }
+
     func track(_ id: String) -> Track? { trackLookup[id] }
     func sourceURL(_ source: MusicSource) throws -> URL {
         if source.isOwned { return documents }
@@ -74,25 +112,78 @@ final class LibraryStore: ObservableObject {
         guard let bookmark = source.bookmark else { throw CocoaError(.fileReadNoPermission) }
         var stale = false
         let url = try URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
-        if stale && !FileManager.default.isReadableFile(atPath: url.path) { throw NSError(domain: "PocketMusic", code: 3, userInfo: [NSLocalizedDescriptionKey: "Folder permission has changed. Reconnect it in Settings."]) }
+        // Check readability only after the caller starts security-scoped access.
         resolvedRoots[source.id] = url
         return url
     }
     func addFolder(_ url: URL, reconnecting: UUID? = nil) {
-        guard !busy else { errorMessage = "Wait for the current scan to finish, then add this folder."; return }
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let grant = FolderAccess(url)
         do {
             try LocalFilePolicy.check(url)
             guard try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { throw CocoaError(.fileReadInvalidFileName) }
-            if reconnecting == nil, sources.contains(where: { (try? sourceURL($0).resolvingSymlinksInPath().standardizedFileURL) == url.resolvingSymlinksInPath().standardizedFileURL }) { rescan(); return }
+            if let id = reconnecting, sources.first(where: { $0.id == id })?.isOwned != false {
+                throw CocoaError(.fileReadNoPermission)
+            }
+            let canonical = url.resolvingSymlinksInPath().standardizedFileURL
+            let queued = folderChanges.reversed().compactMap { change -> MusicSource? in
+                if case .add(let source, let grant) = change, grant.url.resolvingSymlinksInPath().standardizedFileURL == canonical { return source }
+                return nil
+            }.first
+            let duplicate = queued ?? sources.first { (try? sourceURL($0).resolvingSymlinksInPath().standardizedFileURL) == canonical }
+            if duplicate?.isOwned == true { rescanIfNeeded(minimumInterval: 0); return }
+            if let duplicate = duplicate, let id = reconnecting, duplicate.id != id {
+                errorMessage = "This folder is already in your library."; return
+            }
             let data = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-            var source = MusicSource(id: reconnecting ?? UUID(), name: url.lastPathComponent, bookmark: data, isOwned: false)
+            var source = MusicSource(id: reconnecting ?? duplicate?.id ?? UUID(), name: url.lastPathComponent, bookmark: data, isOwned: false)
             if let old = sources.first(where: { $0.id == source.id }) { source.enabled = old.enabled; source.excludedPaths = old.excludedPaths }
-            resolvedRoots[source.id] = nil
-            sources.removeAll { $0.id == source.id }; sources.append(source); try save(source)
-            rescan(only: source.id)
-        } catch { errorMessage = error.localizedDescription }
+            queueFolderChange(.add(source, grant))
+        } catch { errorMessage = "Couldn't add \(url.lastPathComponent): \(error.localizedDescription) Choose the folder again in Files. For cloud storage, download the audio first." }
+    }
+    private func queueFolderChange(_ change: FolderChange) {
+        folderChanges.append(change)
+        if scanning { scanStatus = "Updating music folders…"; scanTask?.cancel() }
+        else if !clearingArtwork { applyFolderChanges() }
+    }
+    private func finishScan() {
+        scanning = false; scanTask = nil
+        for id in firstScanGrants.keys { resolvedRoots[id] = nil }
+        firstScanGrants.removeAll()
+        applyFolderChanges()
+    }
+    private func applyFolderChanges() {
+        guard !busy, !folderChanges.isEmpty else { return }
+        let changes = folderChanges; folderChanges.removeAll()
+        var shouldScan = false
+        for change in changes {
+            do {
+                switch change {
+                case .add(let source, let grant):
+                    try save(source)
+                    if let index = sources.firstIndex(where: { $0.id == source.id }) { sources[index] = source }
+                    else { sources.append(source) }
+                    resolvedRoots[source.id] = grant.url
+                    firstScanGrants[source.id] = grant
+                    shouldScan = shouldScan || source.enabled
+                case .remove(let id):
+                    guard sources.contains(where: { $0.id == id && !$0.isOwned }) else { continue }
+                    var updated = tracks
+                    for index in updated.indices {
+                        updated[index].locations.removeAll { $0.sourceID == id }
+                        if updated[index] != tracks[index] { try database?.save(updated[index], key: "track:\(updated[index].id)", kind: "track") }
+                    }
+                    try database?.remove(key: "source:\(id)"); try database?.commit()
+                    sources.removeAll { $0.id == id }
+                    resolvedRoots[id] = nil; firstScanGrants[id] = nil
+                    if updated != tracks { tracks = updated }
+                }
+            } catch { database?.container.viewContext.rollback(); errorMessage = "Couldn't update music folders: \(error.localizedDescription)" }
+        }
+        if shouldScan { rescan() }
+        else {
+            for id in firstScanGrants.keys { resolvedRoots[id] = nil }
+            firstScanGrants.removeAll()
+        }
     }
 
     func importFiles(_ urls: [URL]) {
@@ -129,9 +220,11 @@ final class LibraryStore: ObservableObject {
                 return errors
             }
             let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
-            scanning = false; scanTask = nil
+            let cancelled = Task.isCancelled
             if !result.isEmpty { errorMessage = result.prefix(5).joined(separator: "\n") }
-            if Task.isCancelled { scanStatus = "Import cancelled" } else { rescan() }
+            if cancelled { scanStatus = "Import cancelled" }
+            finishScan()
+            if !cancelled { rescan() }
         }
     }
 
@@ -147,10 +240,10 @@ final class LibraryStore: ObservableObject {
     func rescan(only id: UUID? = nil) {
         guard !busy, database != nil else { return }
         let selected = sources.filter { $0.enabled && (id == nil || $0.id == id) }
-        scanning = true; scannedCount = 0
+        scanning = true; scannedCount = 0; scanStatus = "Preparing scan…"
         if id == nil { lastScan = Date() }
         scanTask = Task {
-            defer { scanning = false; scanTask = nil }
+            defer { finishScan() }
             for var source in selected {
                 if Task.isCancelled { scanStatus = "Scan cancelled"; break }
                 scanStatus = "Scanning \(source.name)"
@@ -159,9 +252,12 @@ final class LibraryStore: ObservableObject {
                     let access = root.startAccessingSecurityScopedResource()
                     defer { if access { root.stopAccessingSecurityScopedResource() } }
                     let snapshot = trackLookup
-                    let result = try await scanner.scan(root: root, sourceID: source.id, existing: snapshot, cache: artworkDirectory, excluded: source.excludedPaths) { batch, count in
-                        await self.receive(batch, count: count)
-                    }
+                    let completedCount = scannedCount
+                    let result = try await scanner.scan(root: root, sourceID: source.id, existing: snapshot, cache: artworkDirectory, excluded: source.excludedPaths, checked: { count in
+                        await self.updateScanCount(completedCount + count)
+                    }, progress: { batch, count in
+                        await self.receive(batch, count: completedCount + count)
+                    })
                     try Task.checkCancellation()
                     var updated = tracks
                     var changed = false
@@ -217,6 +313,8 @@ final class LibraryStore: ObservableObject {
         }
         if changed { try database?.commit(); playlists = updated }
     }
+    private func updateScanCount(_ count: Int) { scannedCount = count }
+
     private func receive(_ batch: [Track], count: Int) {
         do {
             var updated = tracks
@@ -274,19 +372,8 @@ final class LibraryStore: ObservableObject {
     }
     func cancelScan() { scanTask?.cancel() }
     func removeSource(_ source: MusicSource) {
-        guard !source.isOwned, !busy else { return }
-        do {
-            resolvedRoots[source.id] = nil
-            sources.removeAll { $0.id == source.id }
-            try database?.remove(key: "source:\(source.id)")
-            var updated = tracks
-            for index in updated.indices {
-                updated[index].locations.removeAll { $0.sourceID == source.id }
-                if updated[index] != tracks[index] { try database?.save(updated[index], key: "track:\(updated[index].id)", kind: "track") }
-            }
-            if updated != tracks { tracks = updated }
-            try database?.commit()
-        } catch { errorMessage = error.localizedDescription }
+        guard !source.isOwned else { errorMessage = "Cassette’s own folder cannot be removed. Turn off scanning instead."; return }
+        queueFolderChange(.remove(source.id))
     }
     func favorite(_ track: Track) {
         guard let index = tracks.firstIndex(where: { $0.id == track.id }) else { return }
@@ -343,7 +430,7 @@ final class LibraryStore: ObservableObject {
     func clearArtwork() async {
         guard !busy else { return }
         clearingArtwork = true
-        defer { clearingArtwork = false }
+        defer { clearingArtwork = false; applyFolderChanges() }
         let directory = artworkDirectory
         let failure = await Task.detached(priority: .utility) { () -> String? in
             do {

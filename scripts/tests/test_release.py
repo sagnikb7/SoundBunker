@@ -72,6 +72,31 @@ class ReleaseTests(unittest.TestCase):
         (self.root / 'OfflineMusicPlayer/._App.swift').write_bytes(b'AppleDouble metadata')
         self.assertEqual(release.source_hash(self.root), before)
 
+    def test_platform_exports_share_version_build_and_repeat_increments_build(self):
+        first = release.prepare(self.root, 'ipod')
+        release.finalize(self.root, self.built_app(), 'ipod')
+        mac = release.prepare(self.root, 'mac')
+        self.assertEqual((mac['version'], mac['build']), (first['version'], first['build']))
+        app = self.root / 'Mac.app'
+        (app / 'Contents').mkdir(parents=True)
+        shutil.copy(self.root / 'OfflineMusicPlayer/Info.plist', app / 'Contents/Info.plist')
+        release.finalize(self.root, app, 'mac')
+        manifest = json.loads(self.manifest.read_text())
+        self.assertEqual(manifest['platform_builds'], {'ipod': 2, 'mac': 2})
+        again = release.prepare(self.root, 'mac')
+        self.assertEqual(again['build'], 3)
+        self.assertEqual(release.prepare(self.root, 'mac'), again, 'Failed/retried exports reserve one build')
+
+    def test_wrong_platform_cannot_finalize_and_readme_badge_updates_only_on_success(self):
+        readme = self.root / 'README.md'
+        readme.write_text('[Version](https://img.shields.io/badge/version-1.0.0-blue)')
+        release.prepare(self.root, 'ipod')
+        self.assertIn('version-1.0.0-', readme.read_text())
+        with self.assertRaisesRegex(ValueError, 'platform does not match'):
+            release.finalize(self.root, self.built_app(), 'mac')
+        release.finalize(self.root, self.built_app(), 'ipod')
+        self.assertIn('version-1.1.0-', readme.read_text())
+
     def test_semantic_bumps(self):
         self.assertEqual(release.bumped('1.2.3', 'patch'), '1.2.4')
         self.assertEqual(release.bumped('1.2.3', 'minor'), '1.3.0')

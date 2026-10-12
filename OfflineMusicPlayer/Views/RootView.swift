@@ -11,6 +11,7 @@ struct RootView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var playback: PlaybackCoordinator
     @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedTab = 0
     @State private var showingPlayer = false
     @State private var launched = false
     @State private var keyboardVisible = false
@@ -22,15 +23,15 @@ struct RootView: View {
             }
             .sheet(item: $library.pickerRequest) { request in
                 MusicPicker(folders: request.folders, selected: { urls in
-                    library.pickerRequest = nil
                     if request.folders { if let url = urls.first {
                         if let source = request.excludeFrom { library.excludeFolder(url, from: source) }
                         else { library.addFolder(url, reconnecting: request.reconnecting) }
                     } }
                     else { library.importFiles(urls) }
+                    library.pickerRequest = nil
                 }, cancelled: { library.pickerRequest = nil })
             }
-            .alert("SoundBunker", isPresented: Binding(get: { library.errorMessage != nil || playback.errorMessage != nil }, set: { if !$0 { library.errorMessage = nil; playback.errorMessage = nil } })) {
+            .alert("Cassette", isPresented: Binding(get: { library.errorMessage != nil || playback.errorMessage != nil }, set: { if !$0 { library.errorMessage = nil; playback.errorMessage = nil } })) {
                 Button("OK", role: .cancel) { library.errorMessage = nil; playback.errorMessage = nil }
             } message: { Text(playback.errorMessage ?? library.errorMessage ?? "") }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
@@ -39,6 +40,14 @@ struct RootView: View {
                 keyboardVisible = frame.minY < UIScreen.main.bounds.maxY && frame.height > 0
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
+            .onOpenURL { url in
+                if CassetteWidgetConfiguration.opensPlayer(url) {
+                    playback.connect(library)
+                    showingPlayer = true
+                } else if CassetteWidgetConfiguration.opensLibrary(url) {
+                    showingPlayer = false; selectedTab = 0
+                }
+            }
             .onAppear {
                 if !launched { launched = true; playback.connect(library); library.rescanIfNeeded(minimumInterval: 0) }
             }
@@ -55,11 +64,11 @@ struct RootView: View {
         #endif
     }
     private var tabs: some View {
-        TabView {
-            navigation { LibraryHomeView() }.tabItem { Label("Library", systemImage: "music.note") }
-            navigation { PlaylistsView() }.tabItem { Label("Playlists", systemImage: "music.note.list") }
-            navigation { SearchView() }.tabItem { Label("Search", systemImage: "magnifyingglass") }
-            navigation { SettingsView() }.tabItem { Label("Settings", systemImage: "gearshape") }
+        TabView(selection: $selectedTab) {
+            navigation { LibraryHomeView() }.tabItem { Label("Library", systemImage: "music.note") }.tag(0)
+            navigation { PlaylistsView() }.tabItem { Label("Playlists", systemImage: "music.note.list") }.tag(1)
+            navigation { SearchView() }.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(2)
+            navigation { SettingsView() }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
         }.accentColor(.blue)
     }
     private func navigation<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -83,7 +92,7 @@ struct LibraryHomeView: View {
                     VStack(spacing: 20) {
                         Image(systemName: "music.note").font(.system(size: 56)).foregroundColor(.blue).padding(.top, 36)
                         Text("Your music. Your pocket.").font(.title2.bold()).multilineTextAlignment(.center)
-                        Text("Add a folder from On My iPod, or import audio files. SoundBunker finds the songs inside and keeps them ready offline.")
+                        Text("Add a folder from On My iPod, or import audio files. Cassette finds the songs inside and keeps them ready offline.")
                             .foregroundColor(.secondary).multilineTextAlignment(.center)
                         Button { library.pickerRequest = PickerRequest(folders: true) } label: { Label("Add Music Folder", systemImage: "folder.badge.plus").frame(minHeight: 44) }
                             .buttonStyle(.borderedProminent).accessibilityIdentifier("addMusicFolder")
@@ -94,21 +103,34 @@ struct LibraryHomeView: View {
                 }
             } else {
                 List {
-                    NavigationLink { SongListView(title: "Songs", tracks: library.sortedTracks) } label: { Label("Songs", systemImage: "music.note") }
-                    NavigationLink { AlbumsView() } label: { Label("Albums", systemImage: "square.stack") }
-                    NavigationLink { GroupsView(kind: .artist) } label: { Label("Artists", systemImage: "music.mic") }
-                    NavigationLink { GroupsView(kind: .genre) } label: { Label("Genres", systemImage: "waveform") }
-                    NavigationLink { FoldersView() } label: { Label("Folders", systemImage: "folder") }
-                    NavigationLink { SongListView(title: "Recently Added", tracks: library.browse.recentTracks) } label: { Label("Recently Added", systemImage: "clock") }
-                    Section("Recently Added") {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: 12) {
-                                ForEach(recentAlbums, id: \.id) { album in
-                                    NavigationLink { AlbumDetailView(album: album) } label: { AlbumTile(album: album).frame(width: 112) }.buttonStyle(.plain)
-                                }
-                            }.padding(.vertical, 6)
+                    NavigationLink { SongListView(title: "Songs", tracks: library.sortedTracks) } label: { libraryCategory("Songs", symbol: "music.note", count: library.visibleTracks.count) }
+                    NavigationLink { AlbumsView() } label: { libraryCategory("Albums", symbol: "square.stack", count: library.browse.albums.count) }
+                    NavigationLink { GroupsView(kind: .artist) } label: { libraryCategory("Artists", symbol: "music.mic", count: library.browse.artistNames.count) }
+                    NavigationLink { GroupsView(kind: .genre) } label: { libraryCategory("Genres", symbol: "waveform", count: library.browse.genreNames.count) }
+                    NavigationLink { FoldersView() } label: { libraryCategory("Folders", symbol: "folder", count: library.sources.count) }
+                    NavigationLink { ListeningHistoryView() } label: { libraryCategory("Recently Played", symbol: "clock", count: library.historySongs.count) }
+                    Section {
+                        if library.recentlyPlayed.isEmpty {
+                            Text("Songs you play will appear here.").font(.subheadline).foregroundColor(.secondary)
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    ForEach(library.recentlyPlayed) { song in
+                                        RecentlyPlayedTile(track: song.track).frame(width: 112)
+                                    }
+                                }.padding(.vertical, 6)
+                            }
                         }
-                    }
+                    } header: {
+                        NavigationLink { ListeningHistoryView() } label: {
+                            HStack {
+                                Text("Recently Played")
+                                Spacer()
+                                Image(systemName: "chevron.right").accessibilityHidden(true)
+                            }.frame(minHeight: 44).contentShape(Rectangle())
+                        }.buttonStyle(.plain).foregroundColor(.primary)
+                            .accessibilityLabel("Recently Played, show full listening history")
+                    }.textCase(nil)
                     if library.scanning { ScanProgressView() }
                 }.listStyle(.plain)
             }
@@ -119,7 +141,15 @@ struct LibraryHomeView: View {
                 Button("Rescan Library") { library.rescan() }
             } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Add music") } }
     }
-    private var recentAlbums: [AlbumGroup] { library.browse.recentAlbums }
+    private func libraryCategory(_ title: String, symbol: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Label(title, systemImage: symbol)
+            Spacer(minLength: 8)
+            Text("\(count)").foregroundColor(.secondary).monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(count)")
+    }
 }
 
 struct ScanProgressView: View {
