@@ -17,7 +17,7 @@ From the repository root:
 # Equivalent: ./scripts/create_build.sh --platform=mac
 ```
 
-Outputs are `dist/Cassette-<version>-mac.app` and `.app.zip`. The script prepares release metadata, builds Release universal Catalyst, verifies the copied app/signature/resources, creates a metadata-preserving ZIP, then finalizes the release. `CASSETTE_MAC_DERIVED_DATA` overrides its default `/tmp/CassetteMacRelease` output cache. Download/extract the ZIP or open the `.app` locally. The internal executable remains OfflineMusicPlayer to preserve identity.
+Outputs are `dist/Cassette.app` only. The script prepares release metadata, builds Release universal Catalyst, verifies the copied app/signature/resources, then finalizes the release. `CASSETTE_MAC_DERIVED_DATA` overrides its default `/tmp/CassetteMacRelease` output cache. Quit Cassette and drag `Cassette.app` into Applications, choosing Replace. No ZIP is generated. The internal executable remains OfflineMusicPlayer to preserve identity.
 
 To build the iPod version instead, use `./build --platform=ipod`. Both exports reuse the same version/build for unchanged sources on the first export to each platform. A Mac-only successful package can finalize release notes; a subsequent iPod export verifies its own embedded widget/resources independently. Ad-hoc signing/hardened-runtime settings here are for local execution, not a public distribution receipt.
 

@@ -88,10 +88,10 @@ For a black widget, unlock and launch Cassette, open **Settings → Widgets**, t
 Requires macOS and full Xcode. Open `OfflineMusicPlayer.xcodeproj` and use the **OfflineMusicPlayer** scheme, or run the launcher from the repository root:
 
 ```sh
-# iPod: Release arm64, iOS 15+, unsigned IPA + ZIP
+# iPod: Release arm64, iOS 15+, unsigned IPA
 ./build --platform=ipod
 
-# Mac: universal Mac Catalyst, macOS 12+, ad-hoc signed app + ZIP
+# Mac: universal Mac Catalyst, macOS 12+, ad-hoc signed Cassette.app
 ./build --platform=mac
 ```
 
@@ -99,8 +99,8 @@ Plain `./build`, “build” or “create build” defaults to iPod. Codex also 
 
 | Platform | Generated artifacts | Last verified export |
 |---|---|---|
-| iPod | `dist/Cassette-unsigned-<version>.ipa` and `.ipa.zip` | **1.5.3 (15)** |
-| Mac | `dist/Cassette-<version>-mac.app` and `.app.zip` | **1.3.0 (9)** |
+| iPod | `dist/Cassette-unsigned-<version>.ipa` | **1.5.3 (18)** |
+| Mac | `dist/Cassette.app` | **1.5.3 (18)** |
 
 The launcher validates architecture, platform, minimum OS, embedded resources, versions and archive integrity before finalizing release notes. Builds run sequentially under a lock. Exporting the other platform from unchanged sources reuses the version/build; rebuilding an already-exported platform increments the build number. Failed retries do not consume versions. Packages stay outside Git.
 
@@ -152,3 +152,5 @@ dist/                              Generated artifacts; ignored by Git
 Current-facing documentation and assets use **Cassette**. Older release entries, original design references and archived test records retain their historical names. Internal target names, bundle identity and persistence paths remain stable so updates preserve music access, playlists and favorites. The repository spelling is intentionally [sagnikb7/casette](https://github.com/sagnikb7/casette).
 
 Physical iPod signing/installation, provider-folder journeys, accessibility, background playback, A10 performance and per-codec certification remain open. Queue reordering and deeper codec-specific metadata parsing are tracked in the [implementation plan](docs/engineering/implementation-plan.md). Candidate file extensions are not a verified codec guarantee; consult [codec evidence](docs/testing/codec-support.md).
+
+Builds produce no ZIP companions. Quit Cassette on Mac, then drag `Cassette.app` into Applications and choose Replace to update. The version remains inside the app. If you installed an older version-named app, remove that old application bundle once to avoid duplicate installations; keep your music and application data.

@@ -44,11 +44,3 @@ with zipfile.ZipFile(args.output) as ipa:
 print(args.output.resolve())
 print(f"Bundle: {info['CFBundleIdentifier']}; minimum iOS: {info['MinimumOSVersion']}")
 print('Unsigned package: must be signed/provisioned by Sideloadly before installation.')
-
-zip_output = args.output.with_suffix(args.output.suffix + '.zip')
-with zipfile.ZipFile(zip_output, 'w', compression=zipfile.ZIP_DEFLATED) as outer:
-    outer.write(args.output, args.output.name)
-with zipfile.ZipFile(zip_output) as outer:
-    if outer.testzip() is not None:
-        raise RuntimeError('ZIP integrity check failed')
-print(zip_output.resolve())

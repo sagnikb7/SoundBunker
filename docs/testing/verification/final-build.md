@@ -1,5 +1,17 @@
 # Final build verification
 
+13 October 2026: current local iPod and Mac exports are **1.5.3 (18)**, verified before pushing the no-ZIP packaging change. Application source fingerprint is unchanged. Output names are `dist/Cassette-unsigned-1.5.3.ipa` and `dist/Cassette.app`.
+
+- 18 release/workflow tests and 53 native Release Catalyst tests passed. Native log: `/tmp/cassette-packaging-prepush-tests.log`.
+- Both platform repository/package validators passed, including Mac signature/universal architectures and iPod embedded widget/platform/version/resources.
+- Fresh packaging of the real iPod build in a temporary directory generated only the IPA; all payload file bytes matched the built app.
+- Shell syntax and diff whitespace checks passed. Review found no blocking packaging issue.
+- Documentation and CI now use the no-ZIP policy. CI validates Mac without uploading its bundle; GitHub artifact downloads still have GitHub's own transport wrapper.
+
+These are local checks, not a claim of hosted CI success or physical iPod verification. Historical build 16 hashes below refer only to the prior exports.
+
+# Build 16 historical verification
+
 13 October 2026: **Cassette 1.5.3 (16)** exported sequentially with `./build --platform=ipod` and `./build --platform=mac`. Includes persistent directory checkpoints for cached-first startup and the latest user-supplied Retro Rainbow Cassette Icon.
 
 ## Executed checks

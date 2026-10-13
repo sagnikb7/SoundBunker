@@ -1,12 +1,12 @@
 # Project instructions
 
-## User build preference (saved 12 October 2026)
+## User build preference (updated 13 October 2026)
 
 Recognize explicit commands **`build --platform=ipod`** and **`build --platform=mac`**. Use the root `./build` launcher or `scripts/create_build.sh` with the same flag.
 
-- **iPod:** `./build --platform=ipod` builds Release iphoneos arm64, minimum iOS 15.0, and exports both `dist/Cassette-unsigned-<version>.ipa` and `.ipa.zip`. Verify both archives, the embedded widget/version/resources, architecture and minimum OS. Return both links and explain that signing/provisioning is needed before installation.
-- **Mac:** `./build --platform=mac` builds universal Release Mac Catalyst (arm64/x86_64, macOS 12+) and exports `dist/Cassette-<version>-mac.app` plus `.app.zip`. Verify the app signature, architectures/platform/minimum, resource/version parity and ZIP. Return the app/ZIP links. Explain local ad-hoc signing is not notarized public distribution and that desktop widgets are absent.
-- Plain **“build”**, **“create build”** or an IPA request defaults to **iPod**, retaining the saved IPA+ZIP preference. The script also defaults to iPod for compatibility.
+- **iPod:** `./build --platform=ipod` builds Release iphoneos arm64, minimum iOS 15.0, and exports only `dist/Cassette-unsigned-<version>.ipa`. Verify the IPA, the embedded widget/version/resources, architecture and minimum OS. Return the IPA link and explain that signing/provisioning is needed before installation.
+- **Mac:** `./build --platform=mac` builds universal Release Mac Catalyst (arm64/x86_64, macOS 12+) and exports only `dist/Cassette.app`. Verify the app signature, architectures/platform/minimum, resource/version parity. Return the app link. Explain local ad-hoc signing is not notarized public distribution and that desktop widgets are absent.
+- Plain **“build”**, **“create build”** or an IPA request defaults to **iPod**, without an outer ZIP. The script also defaults to iPod for compatibility.
 - Run platform builds sequentially under the script’s lock. Successful export of the second platform reuses the same version/build for unchanged sources; failed retries do not consume versions. A repeat export of an already-built platform increments the build number. Do not ship test media or claim transfer/installation without evidence.
 
 Keep README.md as the entry point; store product, architecture, build, test and design documentation under `docs/` using descriptive lowercase names. Keep original user design references intact. Do not publish, upload, sync or install artifacts unless the user requests it.
@@ -44,8 +44,10 @@ Record every shipped feature/fix in `release/version.json` pending notes before 
 - Executed test receipts: `docs/testing/verification/final-tests.txt`; historical receipts: `docs/testing/verification/archive/`.
 - Native Mac export/parity: [docs/build/mac-export.md](docs/build/mac-export.md).
 - Physical iPod connection/signing/install: [docs/build/ipod-installation.md](docs/build/ipod-installation.md).
-- IPA + ZIP production and verification: [docs/build/build-artifacts.md](docs/build/build-artifacts.md).
+- IPA production and verification: [docs/build/build-artifacts.md](docs/build/build-artifacts.md).
 
 Update the relevant documents when behavior or verification changes. Keep README links synchronized with this map. Test fixtures belong only to the test target. Never mistake a compiler success or desktop test result for physical iPod verification.
 
 Before pushing, run release tests, repository checks, native tests and device build/packaging validation. Generated logs, personal Xcode settings, credentials and signing profiles stay out of Git. CI must not bump releases or commit generated files.
+
+Build output names: keep the version in the IPA filename; always name the Mac export `Cassette.app` so dragging it into Applications replaces the prior app. Do not produce ZIP companions. Keep internal bundle version/build metadata and persistence identity unchanged.

@@ -9,10 +9,10 @@ import zipfile
 from pathlib import Path
 
 from release import bumped, source_hash
-from mac_artifacts import validate_mac_app, validate_mac_zip
+from mac_artifacts import validate_mac_app
 
 
-def verify(root, app=None, ipa=None, platform='ipod', mac_zip=None):
+def verify(root, app=None, ipa=None, platform='ipod'):
     manifest = json.loads((root / 'release/version.json').read_text())
     pending = manifest.get('pending')
     expected = bumped(manifest['version'], pending['bump']) if pending else manifest['version']
@@ -61,9 +61,7 @@ def verify(root, app=None, ipa=None, platform='ipod', mac_zip=None):
         resources = app / 'Contents/Resources'
         assert json.loads((resources / 'ReleaseNotes.json').read_text()) == notes
         if project_metadata.exists(): assert (resources / 'Project.json').read_bytes() == project_metadata.read_bytes()
-        if mac_zip:
-            assert app.name == f'Cassette-{expected}-mac.app' and mac_zip.name == app.name + '.zip', 'Mac artifact names must match version'
-            validate_mac_zip(app, mac_zip)
+        assert app.name == 'Cassette.app', 'Mac export must be named Cassette.app'
     if app and platform == 'ipod':
         built = plistlib.loads((app / 'Info.plist').read_bytes())
         assert built['CFBundleDisplayName'] == 'Cassette'
@@ -99,10 +97,6 @@ def verify(root, app=None, ipa=None, platform='ipod', mac_zip=None):
         with zipfile.ZipFile(ipa) as archive:
             assert archive.testzip() is None
             assert archive.read('Payload/OfflineMusicPlayer.app/Info.plist') == (app / 'Info.plist').read_bytes()
-        with zipfile.ZipFile(ipa.with_suffix(ipa.suffix + '.zip')) as archive:
-            assert archive.testzip() is None
-            assert archive.namelist() == [ipa.name]
-            assert archive.read(ipa.name) == ipa.read_bytes()
     print(f'Repository/release QA passed: {expected} ({expected_build})')
 
 
@@ -112,14 +106,12 @@ if __name__ == '__main__':
     parser.add_argument('--app', type=Path)
     parser.add_argument('--ipa', type=Path)
     parser.add_argument('--platform', choices=['ipod', 'mac'], default='ipod')
-    parser.add_argument('--mac-zip', type=Path)
     args = parser.parse_args()
-    if args.mac_zip and (not args.app or args.platform != 'mac'): parser.error('--mac-zip requires --platform mac and --app')
     if args.ipa and args.platform != 'ipod': parser.error('--ipa requires --platform ipod')
     if args.ipa and not args.app:
         parser.error('--ipa requires --app')
     try:
-        verify(args.root, args.app, args.ipa, args.platform, args.mac_zip)
+        verify(args.root, args.app, args.ipa, args.platform)
     except (AssertionError, ValueError, OSError, KeyError) as error:
         print(f'QA failed: {error}', file=sys.stderr)
         sys.exit(1)

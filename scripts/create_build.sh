@@ -10,7 +10,7 @@ while [ "$#" -gt 0 ]; do
       if [ "$#" -eq 0 ]; then printf '%s\n' 'Missing value for --platform (ipod or mac).' >&2; exit 2; fi
       TASK_PLATFORM=$1 ;;
     -h|--help)
-      printf '%s\n' 'Usage: ./build [--platform=ipod|mac]' 'Default: ipod. iPod produces IPA + ZIP; Mac produces a local ad-hoc signed .app + ZIP.'
+      printf '%s\n' 'Usage: ./build [--platform=ipod|mac]' 'Default: ipod. iPod produces IPA; Mac produces a local ad-hoc signed .app.'
       exit 0 ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -41,17 +41,17 @@ if [ "$TASK_PLATFORM" = ipod ]; then
   python3 scripts/package_ipa.py "$TASK_APP" "$TASK_IPA"
   python3 scripts/verify_repository.py --platform ipod --app "$TASK_APP" --ipa "$TASK_IPA"
   python3 scripts/release.py finalize --platform ipod --app "$TASK_APP"
-  shasum -a 256 "$TASK_IPA" "$TASK_IPA.zip"
+  shasum -a 256 "$TASK_IPA"
 else
   TASK_DERIVED_DATA=${CASSETTE_MAC_DERIVED_DATA:-/tmp/CassetteMacRelease}
   TASK_APP="$TASK_DERIVED_DATA/Build/Products/Release-maccatalyst/OfflineMusicPlayer.app"
-  TASK_MAC_APP="dist/Cassette-$TASK_VERSION-mac.app"
+  TASK_MAC_APP="dist/Cassette.app"
   xcodebuild -project OfflineMusicPlayer.xcodeproj -scheme OfflineMusicPlayer \
     -configuration Release -destination 'platform=macOS,variant=Mac Catalyst' \
     -derivedDataPath "$TASK_DERIVED_DATA" ONLY_ACTIVE_ARCH=NO ARCHS='arm64 x86_64' \
     CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual ENABLE_HARDENED_RUNTIME=NO build
   python3 scripts/package_mac.py "$TASK_APP" "$TASK_MAC_APP"
-  python3 scripts/verify_repository.py --platform mac --app "$TASK_MAC_APP" --mac-zip "$TASK_MAC_APP.zip"
+  python3 scripts/verify_repository.py --platform mac --app "$TASK_MAC_APP"
   python3 scripts/release.py finalize --platform mac --app "$TASK_MAC_APP"
-  shasum -a 256 "$TASK_MAC_APP/Contents/MacOS/OfflineMusicPlayer" "$TASK_MAC_APP.zip"
+  shasum -a 256 "$TASK_MAC_APP/Contents/MacOS/OfflineMusicPlayer"
 fi
