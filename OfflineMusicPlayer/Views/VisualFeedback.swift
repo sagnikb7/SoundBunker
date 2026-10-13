@@ -13,16 +13,110 @@ struct VisualPressButtonStyle: ButtonStyle {
     }
 }
 
+extension View {
+    /// Quieter row dividers for every list.
+    func subtleSeparator() -> some View { listRowSeparatorTint(Color.primary.opacity(0.08)) }
+    /// Keeps the last row of a pushed list clear of the floating mini player.
+    func miniPlayerClearance() -> some View { modifier(MiniPlayerClearance()) }
+}
+
+private struct MiniPlayerClearance: ViewModifier {
+    @EnvironmentObject private var playback: PlaybackCoordinator
+    func body(content: Content) -> some View {
+        #if targetEnvironment(macCatalyst)
+        content
+        #else
+        content.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: playback.currentTrack == nil ? 0 : 56) }
+        #endif
+    }
+}
+
+private struct MarqueeWidthKey: PreferenceKey {
+    static var defaultValue: [Int: CGFloat] = [:]
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) { value.merge(nextValue()) { $1 } }
+}
+
+/// Single-line text that never truncates: it scrolls when too wide, with faded edges.
+struct MarqueeText: View {
+    var text: String
+    var font: Font
+    var color: Color = .primary
+    /// When true the view is only as wide as its text (up to the space offered), so siblings sit right after it.
+    var hugging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var textWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    private let gap: CGFloat = 40
+    private var overflows: Bool { containerWidth > 0 && textWidth > containerWidth + 0.5 }
+
+    var body: some View {
+        Text(text).font(font).lineLimit(1).opacity(0)
+            .frame(maxWidth: hugging ? nil : .infinity, alignment: .leading)
+            .background(GeometryReader { Color.clear.preference(key: MarqueeWidthKey.self, value: [0: $0.size.width]) })
+            .background(Text(text).font(font).fixedSize().hidden()
+                .background(GeometryReader { Color.clear.preference(key: MarqueeWidthKey.self, value: [1: $0.size.width]) }))
+            .onPreferenceChange(MarqueeWidthKey.self) { values in
+                containerWidth = values[0] ?? containerWidth
+                textWidth = values[1] ?? textWidth
+            }
+            .overlay(alignment: .leading) { content }
+            .clipped()
+            .mask {
+                if overflows { fade }
+                else { Rectangle() }
+            }
+            .accessibilityElement(children: .ignore).accessibilityLabel(text)
+    }
+
+    @ViewBuilder private var content: some View {
+        if !overflows {
+            Text(text).font(font).foregroundColor(color).lineLimit(1)
+        } else if reduceMotion {
+            ScrollView(.horizontal, showsIndicators: false) { Text(text).font(font).foregroundColor(color).fixedSize().padding(.horizontal, 12) }
+        } else {
+            MarqueeScroller(text: text, font: font, color: color, distance: textWidth + gap, gap: gap)
+                .id(text + "\(Int(textWidth))")
+        }
+    }
+    private var fade: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+        }
+    }
+}
+
+private struct MarqueeScroller: View {
+    var text: String
+    var font: Font
+    var color: Color
+    var distance: CGFloat
+    var gap: CGFloat
+    @State private var moving = false
+    var body: some View {
+        HStack(spacing: gap) {
+            Text(text).font(font).foregroundColor(color)
+            Text(text).font(font).foregroundColor(color)
+        }.fixedSize().offset(x: moving ? -distance : 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onAppear {
+                withAnimation(.linear(duration: Double(distance) / 35).delay(1.5).repeatForever(autoreverses: false)) { moving = true }
+            }
+    }
+}
+
 /// Animate a transform of the existing thumbnail, never its layout or blur.
 struct PlaybackArtworkView: View {
     var reduceMotion: Bool
     var track: Track?
     var side: CGFloat
     var isPlaying: Bool
+    var cornerRadius: CGFloat = 6
     var body: some View {
-        ArtworkView(track: track).frame(width: side, height: side)
+        ArtworkView(track: track, cornerRadius: cornerRadius).frame(width: side, height: side)
             .shadow(color: .black.opacity(track != nil && (isPlaying || reduceMotion) ? 0.28 : 0), radius: 12, x: 0, y: 6)
-            .scaleEffect(reduceMotion || track == nil || isPlaying ? 1 : 0.9)
+            .scaleEffect(track == nil ? 1 : isPlaying ? 1.04 : (reduceMotion ? 1 : 0.9))
             .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isPlaying)
             .frame(width: side, height: side)
     }
@@ -33,13 +127,14 @@ struct PlaybackArtworkView: View {
 struct SeekTransportButton: UIViewRepresentable {
     var symbol: String
     var label: String
+    var pointSize: CGFloat = 24
     var tap: () -> Void
     var seek: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 24)), for: .normal)
+        button.setImage(UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: pointSize)), for: .normal)
         button.tintColor = .label
         button.accessibilityLabel = label
         button.accessibilityHint = "Touch and hold to seek"

@@ -35,3 +35,9 @@ Menu source inspection confirms the full-player menu contains Artist, Album and 
 - Verify auto-follow while songs advance, after manual scrolling and backward seeking; measure A10 frame rate/battery using real music.
 
 Xcode 27’s XCTest libraries target newer runtimes than iOS 15; desktop test execution does not certify iOS 15. AppIntents metadata extraction is skipped because the app has no AppIntents dependency. Desktop UI-host/accessibility diagnostic warnings are not device evidence.
+
+## Polish pass checks (pending device verification)
+
+- Drag Now Playing artwork left/right: next/previous fires, short drags return; edge-back gesture still dismisses.
+- Scroll any song list to the end with a track loaded: the last row sits fully above the mini player.
+- Open a song list with a long artist name: the title scrolls with faded edges and the count stays visible.

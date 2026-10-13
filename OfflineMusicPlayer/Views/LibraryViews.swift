@@ -17,6 +17,7 @@ final class ThumbnailLoader {
 struct ArtworkView: View {
     @EnvironmentObject private var library: LibraryStore
     var track: Track?
+    var cornerRadius: CGFloat = 6
     var body: some View {
         GeometryReader { geometry in
             Group {
@@ -25,7 +26,7 @@ struct ArtworkView: View {
                 } else {
                     ZStack { Color(UIColor.secondarySystemBackground); Image(systemName: "music.note").font(.system(size: max(18, geometry.size.width * 0.35))).foregroundColor(.secondary) }
                 }
-            }.frame(width: geometry.size.width, height: geometry.size.height).clipped().cornerRadius(6)
+            }.frame(width: geometry.size.width, height: geometry.size.height).clipped().cornerRadius(cornerRadius)
         }.accessibilityHidden(true)
     }
 }
@@ -64,7 +65,7 @@ struct SongRow: View {
                     }
                 }
             } label: { Image(systemName: "ellipsis").foregroundColor(.secondary).frame(width: 44, height: 44) }.accessibilityLabel("More options for \(track.title)")
-        }.listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 8))
+        }.listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 8)).subtleSeparator()
             .background {
                 NavigationLink(isActive: Binding(get: { destination != nil }, set: { if !$0 { destination = nil } })) {
                     if let destination = destination { SongDestinationContent(destination: destination) }
@@ -75,31 +76,114 @@ struct SongRow: View {
 
 struct SongListView: View {
     @EnvironmentObject private var playback: PlaybackCoordinator
+    @AppStorage("artistPhotosEnabled") private var artistPhotosEnabled = true
     var title: String
     var tracks: [Track]
+    var artist: String? = nil
     @State private var query = ""
     @State private var sort = "Default"
+    @State private var headerVisible = true
+    @State private var artistPhoto: ArtistPhoto?
     var body: some View {
         Group {
             if tracks.isEmpty { EmptyLibraryView(symbol: "music.note", title: "No songs yet", detail: "Add a music folder or import audio files from Library.") }
             else {
                 List {
-                    HStack {
-                        Text("\(filtered.count) songs").font(.footnote).foregroundColor(.secondary)
-                        Spacer()
-                        Menu(sort) { Button("Default") { sort = "Default" }; Button("Title") { sort = "Title" }; Button("Artist") { sort = "Artist" } }.font(.footnote)
-                    }
-                    PlayButtons(tracks: filtered)
+                    Group {
+                        if let photo = artistPhoto, let image = ThumbnailLoader.shared.image(photo.fileURL.path) {
+                            ArtistHeroHeader(title: title, count: filtered.count, image: image)
+                        } else {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                MarqueeText(text: title, font: .largeTitle.weight(.bold))
+                                Spacer(minLength: 8)
+                                Text("\(filtered.count)").font(.title3).foregroundColor(.secondary).monospacedDigit().layoutPriority(1)
+                                    .accessibilityLabel("\(filtered.count) songs")
+                            }.padding(.horizontal, 16)
+                        }
+                    }.listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+                        .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                        .onAppear { headerVisible = true }.onDisappear { headerVisible = false }
+                    SongSearchField(text: $query, placeholder: "Search songs").frame(height: 52)
+                        .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
+                    PlayButtons(tracks: filtered).listRowSeparator(.hidden)
                     ForEach(filtered) { track in SongRow(track: track) { playback.play(filtered, startingAt: track) } }
-                }.listStyle(.plain)
+                }.listStyle(.plain).miniPlayerClearance()
             }
-        }.navigationTitle(title).searchable(text: $query, prompt: "Search songs")
+        }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) { Text(title).font(.headline).lineLimit(1).opacity(headerVisible || tracks.isEmpty ? 0 : 1) }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if !tracks.isEmpty {
+                        Menu {
+                            Picker("Sort", selection: $sort) { Text("Default").tag("Default"); Text("Title").tag("Title"); Text("Artist").tag("Artist") }
+                        } label: { Image(systemName: "arrow.up.arrow.down").frame(width: 44, height: 44) }.accessibilityLabel("Sort songs, \(sort)")
+                    }
+                }
+            }
+            .task(id: artistPhotosEnabled) {
+                artistPhoto = nil
+                guard artist != nil, artistPhotosEnabled else { return }
+                let photo = await ArtistPhotoStore.shared.photo(for: artist ?? "")
+                if !Task.isCancelled { artistPhoto = photo }
+            }
     }
     private var filtered: [Track] {
         let result = tracks.filter { query.isEmpty || ($0.title + " " + $0.artist + " " + $0.album).localizedCaseInsensitiveContains(query) }
         if sort == "Title" { return result.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending } }
         if sort == "Artist" { return result.sorted { $0.artist.localizedStandardCompare($1.artist) == .orderedAscending } }
         return result
+    }
+}
+
+private struct ArtistHeroHeader: View {
+    var title: String
+    var count: Int
+    var image: UIImage
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Image(uiImage: image).resizable().scaledToFill()
+                .frame(maxWidth: .infinity).frame(height: 250).clipped()
+            LinearGradient(
+                colors: [.clear, Color(UIColor.systemBackground).opacity(0.3), Color(UIColor.systemBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                MarqueeText(text: title, font: .largeTitle.weight(.bold))
+                Text("\(count)").font(.title3).foregroundColor(.secondary).monospacedDigit().fixedSize().layoutPriority(2)
+                    .accessibilityLabel("\(count) songs")
+            }.frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity).frame(height: 250)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// Native-looking minimal search bar that sits inside the list, under the title.
+struct SongSearchField: UIViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> UISearchBar {
+        let bar = UISearchBar()
+        bar.searchBarStyle = .minimal
+        bar.placeholder = placeholder
+        bar.autocapitalizationType = .none
+        bar.delegate = context.coordinator
+        return bar
+    }
+    func updateUIView(_ bar: UISearchBar, context: Context) {
+        context.coordinator.parent = self
+        if bar.text != text { bar.text = text }
+    }
+    final class Coordinator: NSObject, UISearchBarDelegate {
+        var parent: SongSearchField
+        init(_ parent: SongSearchField) { self.parent = parent }
+        func searchBar(_ bar: UISearchBar, textDidChange searchText: String) { parent.text = searchText }
+        func searchBarSearchButtonClicked(_ bar: UISearchBar) { bar.resignFirstResponder() }
+        func searchBarTextDidBeginEditing(_ bar: UISearchBar) { bar.setShowsCancelButton(true, animated: true) }
+        func searchBarTextDidEndEditing(_ bar: UISearchBar) { bar.setShowsCancelButton(false, animated: true) }
+        func searchBarCancelButtonClicked(_ bar: UISearchBar) { parent.text = ""; bar.text = ""; bar.resignFirstResponder() }
     }
 }
 
@@ -142,7 +226,7 @@ struct AlbumsView: View {
     var body: some View {
         ScrollView { LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 16) {
             ForEach(library.browse.albums) { album in NavigationLink { AlbumDetailView(album: album) } label: { AlbumTile(album: album) }.buttonStyle(.plain) }
-        }.padding(16) }.navigationTitle("Albums")
+        }.padding(16) }.miniPlayerClearance().navigationTitle("Albums")
     }
 }
 struct AlbumDetailView: View {
@@ -158,7 +242,7 @@ struct AlbumDetailView: View {
             }.frame(maxWidth: .infinity).padding(.vertical, 12).listRowSeparator(.hidden)
             PlayButtons(tracks: album.tracks)
             ForEach(album.tracks) { track in SongRow(track: track) { playback.play(album.tracks, startingAt: track) } }
-        }.listStyle(.plain).navigationTitle(album.title).navigationBarTitleDisplayMode(.inline)
+        }.listStyle(.plain).miniPlayerClearance().navigationTitle(album.title).navigationBarTitleDisplayMode(.inline)
     }
 }
 struct GroupsView: View {
@@ -168,15 +252,15 @@ struct GroupsView: View {
     var body: some View {
         List(groups, id: \.self) { group in
             let tracks = (kind == .artist ? library.browse.artists[group] : library.browse.genres[group]) ?? []
-            NavigationLink { SongListView(title: group, tracks: tracks) } label: {
+            NavigationLink { SongListView(title: group, tracks: tracks, artist: kind == .artist ? group : nil) } label: {
                 if kind == .artist { ArtistGroupRow(artist: group, count: tracks.count) }
                 else {
                     HStack { Image(systemName: "waveform").foregroundColor(.blue).frame(width: 32)
                         VStack(alignment: .leading) { Text(group); Text("\(tracks.count) songs").font(.footnote).foregroundColor(.secondary) }
                     }.frame(minHeight: 44)
                 }
-            }
-        }.listStyle(.plain).navigationTitle(kind == .artist ? "Artists" : "Genres")
+            }.subtleSeparator()
+        }.listStyle(.plain).miniPlayerClearance().navigationTitle(kind == .artist ? "Artists" : "Genres")
     }
     private var groups: [String] { kind == .artist ? library.browse.artistNames : library.browse.genreNames }
 }
@@ -190,10 +274,10 @@ struct FoldersView: View {
                     HStack { Image(systemName: "folder.fill").foregroundColor(.blue).frame(width: 32)
                         VStack(alignment: .leading) { Text(source.name); Text(source.needsReconnect ? "Reconnect required" : "\(library.tracks.filter { $0.locations.contains { $0.sourceID == source.id } }.count) songs").font(.footnote).foregroundColor(.secondary) }
                     }.frame(minHeight: 44)
-                }
+                }.subtleSeparator()
             }
-            Button("Add Music Folder…") { library.pickerRequest = PickerRequest(folders: true) }
-        }.navigationTitle("Folders")
+            Button("Add Music Folder…") { library.pickerRequest = PickerRequest(folders: true) }.subtleSeparator()
+        }.miniPlayerClearance().navigationTitle("Folders")
     }
 }
 struct FolderContentsView: View {
@@ -209,11 +293,11 @@ struct FolderContentsView: View {
     private var songs: [Track] { entries.filter { !$0.1.contains("/") }.map { $0.0 } }
     var body: some View {
         List {
-            ForEach(folders, id: \.self) { folder in NavigationLink { FolderContentsView(source: source, path: path + folder + "/") } label: { Label(folder, systemImage: "folder") } }
+            ForEach(folders, id: \.self) { folder in NavigationLink { FolderContentsView(source: source, path: path + folder + "/") } label: { Label(folder, systemImage: "folder") }.subtleSeparator() }
             if !songs.isEmpty { PlayButtons(tracks: songs) }
             ForEach(songs) { track in SongRow(track: track) { playback.play(songs, startingAt: track) } }
             if entries.isEmpty { Text("No indexed audio in this folder.").foregroundColor(.secondary) }
-        }.listStyle(.plain).navigationTitle(path.isEmpty ? source.name : String(path.dropLast()).components(separatedBy: "/").last ?? source.name).navigationBarTitleDisplayMode(.inline)
+        }.listStyle(.plain).miniPlayerClearance().navigationTitle(path.isEmpty ? source.name : String(path.dropLast()).components(separatedBy: "/").last ?? source.name).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -223,7 +307,7 @@ struct SongDestinationContent: View {
     var destination: PlayerDestination
     @ViewBuilder var body: some View {
         switch destination {
-        case .artist(let name): SongListView(title: name, tracks: library.browse.artists[name] ?? [])
+        case .artist(let name): SongListView(title: name, tracks: library.browse.artists[name] ?? [], artist: name)
         case .album(let key):
             if let album = library.browse.albums.first(where: { $0.id == key }) { AlbumDetailView(album: album) }
             else { Text("Album is unavailable") }
@@ -259,9 +343,9 @@ struct ListeningHistoryView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             SongRow(track: song.track) { playback.play([song.track]) }
                             Text(song.entry.playedAt, style: .date) + Text(" · ") + Text(song.entry.playedAt, style: .time)
-                        }.font(.caption).foregroundColor(.secondary)
+                        }.font(.caption).foregroundColor(.secondary).subtleSeparator()
                     }
-                }.listStyle(.plain)
+                }.listStyle(.plain).miniPlayerClearance()
             }
         }.navigationTitle("Listening History").navigationBarTitleDisplayMode(.inline)
     }

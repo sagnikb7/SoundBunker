@@ -100,19 +100,18 @@ final class PlaybackTests: XCTestCase {
         library.rescan(); try await waitForScan(library)
         let track = try XCTUnwrap(library.sortedTracks.first)
         for _ in 0..<12 { library.recordPlayback(track) }
-        XCTAssertEqual(library.recentlyPlayed.count, 10)
-        XCTAssertEqual(library.historySongs.count, 12)
-        XCTAssertEqual(Set(library.recentlyPlayed.map(\.id)).count, 10, "Repeated song plays have distinct row identities")
-        XCTAssertEqual(library.recentlyPlayed.map(\.id), Array(library.playbackHistory.prefix(10)).map(\.id))
+        XCTAssertEqual(library.recentlyPlayed.count, 1)
+        XCTAssertEqual(library.historySongs.count, 1)
+        XCTAssertEqual(library.recentlyPlayed.first?.entry.id, library.playbackHistory.first?.id, "The newest play represents a repeated song")
         let reopened = LibraryStore(documents: documents, databaseURL: store)
         XCTAssertEqual(reopened.playbackHistory, library.playbackHistory)
-        XCTAssertEqual(reopened.historySongs.count, 12)
+        XCTAssertEqual(reopened.historySongs.count, 1)
         let source = try XCTUnwrap(reopened.sources.first)
         reopened.setEnabled(source.id, enabled: false)
         XCTAssertTrue(reopened.historySongs.isEmpty, "History follows folder visibility policy")
         XCTAssertEqual(reopened.playbackHistory.count, 12, "Exclusion does not erase listening history")
         reopened.setEnabled(source.id, enabled: true); try await waitForScan(reopened)
-        XCTAssertEqual(reopened.recentlyPlayed.count, 10)
+        XCTAssertEqual(reopened.recentlyPlayed.count, 1)
     }
 
     @MainActor

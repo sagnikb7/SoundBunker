@@ -16,6 +16,7 @@ struct ArtistPhoto: Codable {
 actor ArtistPhotoStore {
     static let shared = ArtistPhotoStore()
     struct CacheEntry: Codable { var photo: ArtistPhoto?; var checked: Date; var retryAfter: Date? = nil }
+    private static let cachedImageMinimumPixels = 320
     private let directory: URL
     private let session: URLSession
     private let preferences: UserDefaults
@@ -38,14 +39,19 @@ actor ArtistPhotoStore {
         guard artist != "Unknown Artist", !artist.isEmpty, artist.count <= 150 else { return nil }
         let key = SHA256.hash(data: Data(artist.lowercased().utf8)).map { String(format: "%02x", $0) }.joined()
         let recordURL = directory.appendingPathComponent(key + ".json")
+        var cachedPhoto: ArtistPhoto?
         if let data = try? Data(contentsOf: recordURL), let entry = try? JSONDecoder().decode(CacheEntry.self, from: data) {
             if var photo = entry.photo {
                 photo.fileURL = directory.appendingPathComponent(key + ".jpg")
-                if FileManager.default.fileExists(atPath: photo.fileURL.path) { return photo }
+                if FileManager.default.fileExists(atPath: photo.fileURL.path) {
+                    cachedPhoto = photo
+                    let pixels = UIImage(contentsOfFile: photo.fileURL.path).map { max($0.size.width * $0.scale, $0.size.height * $0.scale) } ?? 0
+                    if pixels >= CGFloat(Self.cachedImageMinimumPixels) || Date() < (entry.retryAfter ?? .distantPast) { return photo }
+                }
             }
             if entry.photo == nil, Date() < (entry.retryAfter ?? entry.checked.addingTimeInterval(86_400)) { return nil }
         }
-        guard preferences.object(forKey: "artistPhotosEnabled") as? Bool ?? true else { return nil }
+        guard preferences.object(forKey: "artistPhotosEnabled") as? Bool ?? true else { return cachedPhoto }
         if let job = jobs[key] { return await job.value }
         let job = Task { await self.lookup(artist, key: key) }
         jobs[key] = job
@@ -53,8 +59,10 @@ actor ArtistPhotoStore {
         jobs[key] = nil
         // Failures/no match are cached to avoid a new network request on every row appearance.
         let failed = networkFailures.remove(key) != nil
-        if !job.isCancelled, let data = try? JSONEncoder().encode(CacheEntry(photo: photo, checked: Date(), retryAfter: Date().addingTimeInterval(failed ? 300 : 86_400))) { try? data.write(to: recordURL, options: .atomic) }
-        return photo
+        let result = photo ?? cachedPhoto
+        let retryAfter = photo == nil ? Date().addingTimeInterval(failed ? 300 : 86_400) : nil
+        if !job.isCancelled, let data = try? JSONEncoder().encode(CacheEntry(photo: result, checked: Date(), retryAfter: retryAfter)) { try? data.write(to: recordURL, options: .atomic) }
+        return result
     }
     private func request(_ url: URL, maximumBytes: Int = 1_000_000) async throws -> Data {
         try Task.checkCancellation()
@@ -117,7 +125,7 @@ actor ArtistPhotoStore {
             let search = try JSONSerialization.jsonObject(with: await request(searchURL)) as? [String: Any]
             guard let query = search?["query"] as? [String: Any], let pages = query["pages"] as? [[String: Any]],
                   let page = Self.match(pages, artist: artist), let filename = page["pageimage"] as? String else { return nil }
-            let infoURL = Self.apiURL(["action":"query", "titles":"File:" + filename, "prop":"imageinfo", "iiprop":"url|extmetadata", "iiurlwidth":"160", "format":"json", "formatversion":"2"])
+            let infoURL = Self.apiURL(["action":"query", "titles":"File:" + filename, "prop":"imageinfo", "iiprop":"url|extmetadata", "iiurlwidth":"640", "format":"json", "formatversion":"2"])
             let info = try JSONSerialization.jsonObject(with: await request(infoURL)) as? [String: Any]
             let imageQuery = info?["query"] as? [String: Any]
             let imagePages = imageQuery?["pages"] as? [[String: Any]]
@@ -134,7 +142,7 @@ actor ArtistPhotoStore {
             guard licenseURL.scheme == "https" else { return nil }
             let data = try await request(imageURL, maximumBytes: 2_000_000)
             guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
-                  let thumbnailImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 160, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary),
+                  let thumbnailImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 640, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary),
                   let jpeg = UIImage(cgImage: thumbnailImage).jpegData(compressionQuality: 0.8) else { return nil }
             let fileURL = directory.appendingPathComponent(key + ".jpg")
             try jpeg.write(to: fileURL, options: .atomic)

@@ -74,11 +74,8 @@ struct RootView: View {
         }.accentColor(.blue)
     }
     private func navigation<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        NavigationView { content().background(BackGestureSupport()).safeAreaInset(edge: .bottom) {
-            #if !targetEnvironment(macCatalyst)
-            Color.clear.frame(height: playback.currentTrack == nil ? 0 : 56)
-            #endif
-        } }.navigationViewStyle(.stack)
+        // Each list/scroll view applies miniPlayerClearance() itself; a NavigationView-level inset doesn't reach pushed screens.
+        NavigationView { content().background(BackGestureSupport()) }.navigationViewStyle(.stack)
     }
     @ViewBuilder private var miniPlayer: some View {
         if playback.currentTrack != nil { MiniPlayer(showingPlayer: $showingPlayer) }
@@ -105,12 +102,14 @@ struct LibraryHomeView: View {
                 }
             } else {
                 List {
+                    Group {
                     NavigationLink { SongListView(title: "Songs", tracks: library.sortedTracks) } label: { libraryCategory("Songs", symbol: "music.note", count: library.visibleTracks.count) }
                     NavigationLink { AlbumsView() } label: { libraryCategory("Albums", symbol: "square.stack", count: library.browse.albums.count) }
                     NavigationLink { GroupsView(kind: .artist) } label: { libraryCategory("Artists", symbol: "music.mic", count: library.browse.artistNames.count) }
                     NavigationLink { GroupsView(kind: .genre) } label: { libraryCategory("Genres", symbol: "waveform", count: library.browse.genreNames.count) }
                     NavigationLink { FoldersView() } label: { libraryCategory("Folders", symbol: "folder", count: library.sources.count) }
                     NavigationLink { ListeningHistoryView() } label: { libraryCategory("Recently Played", symbol: "clock", count: library.historySongs.count) }
+                    }.subtleSeparator()
                     Section {
                         if library.recentlyPlayed.isEmpty {
                             Text("Songs you play will appear here.").font(.subheadline).foregroundColor(.secondary)
@@ -134,7 +133,7 @@ struct LibraryHomeView: View {
                             .accessibilityLabel("Recently Played, show full listening history")
                     }.textCase(nil)
                     if library.scanning { ScanProgressView() }
-                }.listStyle(.plain)
+                }.listStyle(.plain).miniPlayerClearance()
             }
         }.navigationTitle("Library")
             .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Menu {

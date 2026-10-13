@@ -6,6 +6,46 @@ Every user-facing feature or fix is recorded here when its release build succeed
 
 The build workflow moves pending feature/fix notes into a dated release section after successful packaging.
 
+## 1.5.6 — 13 October 2026
+
+Build: 22.
+
+### Changed
+
+- Artist pages now fetch and cache higher-resolution photos, while retaining an existing thumbnail if an upgrade fails.
+- Recently Played shows each song only once, represented by its latest play.
+
+## 1.5.5 — 13 October 2026
+
+Build: 21.
+
+### Changed
+
+- Artist song pages show the available artist photo as a full-width header behind the artist name, fading into the current light or dark background.
+- Now Playing artwork swipes use smoother rubber-band tracking and spring transitions.
+- Now Playing artwork, title clipping, song-options tap target, song-count alignment, and mini-player transport sizing were refined.
+
+### Fixed
+
+- Left-edge swipes reliably go back one level from library and other pushed navigation screens.
+
+## 1.5.4 — 13 October 2026
+
+Build: 20.
+
+### Changed
+
+- Sleep timer moved from the Now Playing header into the song options menu.
+- Now Playing song title stays on one line and scrolls with faded edges when too long.
+- Larger Now Playing artwork with rounder corners; drag it sideways to skip to the next or previous song.
+- Songs lists show the song count beside the title and use a sort icon at the top right.
+- Mini player play/pause and next buttons now match in size.
+- More subtle dividers in every list.
+
+### Fixed
+
+- The last song in a list is no longer hidden behind the mini player.
+
 ## 1.5.3 — 13 October 2026
 
 Build: 15.

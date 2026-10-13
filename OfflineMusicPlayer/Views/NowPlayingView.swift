@@ -12,8 +12,8 @@ struct MiniPlayer: View {
                     Spacer(minLength: 0)
                 }.frame(minHeight: 52).contentShape(Rectangle())
             }.buttonStyle(VisualPressButtonStyle()).accessibilityLabel("Open Now Playing")
-            Button { playback.toggle() } label: { Image(systemName: (playback.playbackRequested || playback.isPlaying) ? "pause.fill" : "play.fill").frame(width: 52, height: 52) }.accessibilityLabel((playback.playbackRequested || playback.isPlaying) ? "Pause" : "Play")
-            SeekTransportButton(symbol: "forward.fill", label: "Next song", tap: { playback.next() }, seek: { playback.seek(to: playback.position + 2) }).frame(width: 52, height: 52)
+            Button { playback.toggle() } label: { Image(systemName: (playback.playbackRequested || playback.isPlaying) ? "pause.fill" : "play.fill").font(.system(size: 20)).frame(width: 52, height: 52) }.accessibilityLabel((playback.playbackRequested || playback.isPlaying) ? "Pause" : "Play")
+            SeekTransportButton(symbol: "forward.fill", label: "Next song", pointSize: 17, tap: { playback.next() }, seek: { playback.seek(to: playback.position + 2) }).frame(width: 52, height: 52)
         }.buttonStyle(VisualPressButtonStyle()).padding(.horizontal, 12).background(.regularMaterial)
             .overlay(alignment: .top) { Divider() }
     }
@@ -43,6 +43,8 @@ private struct NowPlayingContent: View {
     @State private var scrubPosition: Double = 0
     @State private var isScrubbing = false
     @State private var showingSleepTimer = false
+    @State private var dragOffset: CGFloat = 0
+    @State private var artworkTransitioning = false
     @State private var playlistTrack: Track?
     @State private var destination: PlayerDestination?
     @State private var lyricLines: [LyricLine] = []
@@ -50,28 +52,64 @@ private struct NowPlayingContent: View {
         ZStack {
             ArtworkSurface(artworkURL: currentTrack?.artwork.map { library.artworkDirectory.appendingPathComponent($0) })
             VStack(spacing: 0) {
-                header
+                header.padding(.horizontal, 24)
                 GeometryReader { geometry in
                     if mode == .artwork {
-                        ScrollView {
-                            let side = max(0, min(240, geometry.size.width, geometry.size.height - 40))
-                            PlaybackArtworkView(reduceMotion: reduceMotion, track: currentTrack, side: side, isPlaying: playback.playbackRequested || playback.isPlaying)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { playback.toggle() }
-                                .frame(maxWidth: .infinity).padding(.vertical, 20)
-                                .contentShape(Rectangle())
-                                .simultaneousGesture(DragGesture(minimumDistance: 24, coordinateSpace: .global).onEnded { value in
-                                    guard value.startLocation.x > 32, abs(value.translation.width) > 50,
-                                          abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
-                                    if value.translation.width < 0 { playback.next() } else { playback.previousTrack() }
+                        // Artwork gets 12-point side margins; the controls retain their 24-point margins.
+                        let side = max(0, min(geometry.size.width - 24, geometry.size.height - 40))
+                        PlaybackArtworkView(reduceMotion: reduceMotion, track: currentTrack, side: side, isPlaying: playback.playbackRequested || playback.isPlaying, cornerRadius: 10)
+                            .offset(x: dragOffset)
+                            .opacity(1 - min(0.5, abs(dragOffset) / max(1, geometry.size.width) * 0.8))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { playback.toggle() }
+                            .gesture(DragGesture(minimumDistance: 6, coordinateSpace: .global)
+                                .onChanged { value in
+                                    guard !artworkTransitioning, value.startLocation.x > 32,
+                                          abs(value.translation.width) > abs(value.translation.height) else { return }
+                                    dragOffset = rubberBanded(value.translation.width, dimension: geometry.size.width)
+                                }
+                                .onEnded { value in
+                                    let width = geometry.size.width
+                                    let horizontal = !artworkTransitioning && value.startLocation.x > 32 &&
+                                        abs(value.translation.width) > abs(value.translation.height) * 1.25
+                                    let projected = abs(value.predictedEndTranslation.width) > abs(value.translation.width)
+                                        ? value.predictedEndTranslation.width : value.translation.width
+                                    // Require a deliberate pull or a genuinely fast flick. Short releases
+                                    // settle without the pronounced back-and-forth of a loose spring.
+                                    guard horizontal, max(abs(value.translation.width), abs(projected) * 0.45) > 110 else {
+                                        withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.92, blendDuration: 0.1)) {
+                                            dragOffset = 0
+                                        }
+                                        return
+                                    }
+                                    let forward = projected < 0
+                                    if reduceMotion {
+                                        dragOffset = 0
+                                        if forward { playback.next() } else { playback.previousTrack() }
+                                        return
+                                    }
+                                    artworkTransitioning = true
+                                    withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.9, blendDuration: 0.1)) {
+                                        dragOffset = forward ? -(width + side) : width + side
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                                        if forward { playback.next() } else { playback.previousTrack() }
+                                        dragOffset = forward ? width : -width
+                                        withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.1)) {
+                                            dragOffset = 0
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) {
+                                            artworkTransitioning = false
+                                        }
+                                    }
                                 })
-                        }
-                    } else if mode == .queue { queueView }
-                    else { lyricsView }
+                    } else if mode == .queue { queueView.padding(.horizontal, 24) }
+                    else { lyricsView.padding(.horizontal, 24) }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
                 // This dock is outside every ScrollView. Artwork/lyrics yield space first.
-                controlDock
-            }.padding(.horizontal, 24)
+                controlDock.padding(.horizontal, 24)
+            }
         }
         .buttonStyle(VisualPressButtonStyle())
         .background(BackGestureSupport(rootBack: { dismiss() }))
@@ -110,19 +148,14 @@ private struct NowPlayingContent: View {
                     Image(systemName: "chevron.down").frame(width: 52, height: 52, alignment: .leading).contentShape(Rectangle())
                 }.accessibilityLabel("Dismiss Now Playing")
                 Spacer(minLength: 0)
-                Button { showingSleepTimer = true } label: {
-                    Image(systemName: playback.sleepTimerMode == nil ? "moon" : "moon.fill")
-                        .foregroundColor(playback.sleepTimerMode == nil ? .primary : .blue)
-                        .frame(width: 52, height: 52)
-                }.accessibilityLabel(playback.sleepTimerLabel)
             }
         }.frame(minHeight: 52)
     }
 
     private var metadata: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 4) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(playback.title ?? "Nothing playing").font(.title3.weight(.semibold)).lineLimit(2)
+                MarqueeText(text: playback.title ?? "Nothing playing", font: .title3.weight(.semibold))
                 if let artist = currentTrack?.artist { Text(artist).foregroundColor(.secondary).lineLimit(1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Menu {
@@ -132,13 +165,20 @@ private struct NowPlayingContent: View {
                 }
                 Button("Add to Playlist", systemImage: "text.badge.plus") { playlistTrack = currentTrack }
                     .disabled(currentTrack == nil)
+                Button(playback.sleepTimerLabel, systemImage: playback.sleepTimerMode == nil ? "moon" : "moon.fill") { showingSleepTimer = true }
             } label: {
                 Image(systemName: "ellipsis").font(.title3).foregroundColor(.white)
-                    .frame(width: 52, height: 52, alignment: .trailing).contentShape(Rectangle())
+                    .frame(width: 60, height: 60, alignment: .trailing).contentShape(Rectangle())
             }.accessibilityLabel("Song options")
         }.frame(minHeight: 52)
     }
     private var currentTrack: Track? { playback.currentTrack.flatMap { library.track($0.id) } ?? playback.currentTrack }
+    private func rubberBanded(_ distance: CGFloat, dimension: CGFloat) -> CGFloat {
+        let dimension = max(1, dimension)
+        let magnitude = abs(distance)
+        let resisted = (1 - 1 / ((magnitude * 0.55 / dimension) + 1)) * dimension
+        return distance < 0 ? -resisted : resisted
+    }
     private var lyricFingerprint: String? { currentTrack.map { $0.id + ":" + $0.fingerprint } }
     private var isFavorite: Bool { currentTrack.flatMap { library.track($0.id) }?.favorite ?? false }
     private var controlDock: some View {

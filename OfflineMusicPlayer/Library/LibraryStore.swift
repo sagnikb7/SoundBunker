@@ -99,8 +99,10 @@ final class LibraryStore: ObservableObject {
     }
     var historySongs: [PlayedSong] {
         let visible = Dictionary(uniqueKeysWithValues: visibleTracks.map { ($0.id, $0) })
+        var seen = Set<String>()
         return playbackHistory.compactMap { entry in
-            visible[entry.trackID].map { PlayedSong(entry: entry, track: $0) }
+            guard seen.insert(entry.trackID).inserted else { return nil }
+            return visible[entry.trackID].map { PlayedSong(entry: entry, track: $0) }
         }
     }
     var recentlyPlayed: [PlayedSong] { Array(historySongs.prefix(10)) }

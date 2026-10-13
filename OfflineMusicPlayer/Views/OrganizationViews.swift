@@ -11,10 +11,10 @@ struct SearchView: View {
                 List {
                     Section("Songs") { ForEach(songs) { track in SongRow(track: track) { playback.play(songs, startingAt: track) } } }
                     Section("Albums") { ForEach(library.browse.albums.filter { matches($0.title) || matches($0.artist) }) { album in NavigationLink(album.title) { AlbumDetailView(album: album) } } }
-                    Section("Artists") { ForEach(library.browse.artistNames.filter(matches), id: \.self) { artist in NavigationLink(artist) { SongListView(title: artist, tracks: library.browse.artists[artist] ?? []) } } }
+                    Section("Artists") { ForEach(library.browse.artistNames.filter(matches), id: \.self) { artist in NavigationLink(artist) { SongListView(title: artist, tracks: library.browse.artists[artist] ?? [], artist: artist) } } }
                     Section("Playlists") { ForEach(library.playlists.filter { matches($0.name) }) { playlist in NavigationLink(playlist.name) { PlaylistDetailView(id: playlist.id) } } }
                     if songs.isEmpty { Text("No matching songs").foregroundColor(.secondary) }
-                }.listStyle(.plain)
+                }.listStyle(.plain).subtleSeparator().miniPlayerClearance()
             }
         }.navigationTitle("Search").searchable(text: $query, prompt: "Songs, artists, albums")
     }
@@ -36,7 +36,7 @@ struct PlaylistsView: View {
                 }
             } }.onDelete { indices in indices.map { library.playlists[$0] }.forEach(library.deletePlaylist) }
             Button("New Playlist…") { creating = true }
-        }.navigationTitle("Playlists").toolbar { EditButton() }
+        }.subtleSeparator().miniPlayerClearance().navigationTitle("Playlists").toolbar { EditButton() }
             .sheet(isPresented: $creating) { NameSheet(title: "New Playlist", value: "") { library.createPlaylist($0) } }
     }
 }
@@ -78,7 +78,7 @@ struct PlaylistDetailView: View {
                 Button("Add Songs") { adding = true }
                 Button("Rename Playlist") { renaming = true }
             }
-        }.listStyle(.plain).navigationTitle(playlist?.name ?? "Playlist").toolbar { EditButton() }
+        }.listStyle(.plain).subtleSeparator().miniPlayerClearance().navigationTitle(playlist?.name ?? "Playlist").toolbar { EditButton() }
             .sheet(isPresented: $adding) { NavigationView { List(library.sortedTracks) { track in Button {
                 library.toggleTrack(track.id, in: id)
             } label: {
@@ -123,7 +123,7 @@ struct SourceSettingsView: View {
             } footer: {
                 Text("In Files, choose Browse → On My iPod and select a folder. iOS grants access to selected folders, not the entire device. Cassette’s own folder is scanned automatically. Source removal never deletes your audio.")
             }
-        }.navigationTitle("Music Folders").alert("Remove this source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+        }.subtleSeparator().miniPlayerClearance().navigationTitle("Music Folders").alert("Remove this source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button("Remove", role: .destructive) { if let source = removing { library.removeSource(source) }; removing = nil }
             Button("Cancel", role: .cancel) { removing = nil }
         } message: { Text("Your music files stay where they are. Tracks shared with another folder stay accessible.") }
@@ -156,7 +156,7 @@ struct SourceDetailView: View {
                     } footer: { Text("Removes this folder’s library access only. Your original audio, favorites and playlists are kept.") }
                 }
             }
-        }.navigationTitle(source?.name ?? "Folder").navigationBarTitleDisplayMode(.inline)
+        }.subtleSeparator().miniPlayerClearance().navigationTitle(source?.name ?? "Folder").navigationBarTitleDisplayMode(.inline)
             .alert("Remove this folder?", isPresented: $confirmingRemoval) {
                 Button("Remove", role: .destructive) {
                     if let source = source { library.removeSource(source) }

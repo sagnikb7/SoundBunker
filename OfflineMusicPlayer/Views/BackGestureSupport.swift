@@ -22,20 +22,37 @@ struct BackGestureSupport: UIViewControllerRepresentable {
                 ancestor = controller.parent
             }
             if let pop = navigation?.interactivePopGestureRecognizer {
-                nativePop = pop; pop.isEnabled = true; pop.delegate = self
+                // SwiftUI can leave its recognizer disabled or with a stale delegate on pushed
+                // List screens. One edge recognizer handles stack pops and modal roots uniformly.
+                nativePop = pop
+                pop.isEnabled = false
             }
-            guard rootBack != nil, edge == nil, let target = navigation?.view ?? parent?.view else { return }
+            guard edge == nil, let target = navigation?.view ?? parent?.view else { return }
             let gesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(back(_:)))
-            gesture.edges = .left; gesture.delegate = self
+            gesture.edges = .left
+            gesture.maximumNumberOfTouches = 1
+            gesture.cancelsTouchesInView = false
+            gesture.delegate = self
             target.addGestureRecognizer(gesture); edge = gesture; attachedView = target
         }
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            if gestureRecognizer === nativePop { return (navigation?.viewControllers.count ?? 0) > 1 && navigation?.transitionCoordinator == nil }
-            return rootBack != nil && (navigation?.viewControllers.count ?? 1) <= 1
+            let canPop = (navigation?.viewControllers.count ?? 0) > 1
+            return navigation?.transitionCoordinator == nil && (canPop || rootBack != nil)
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
         }
         @objc private func back(_ gesture: UIScreenEdgePanGestureRecognizer) {
-            if gesture.state == .ended, gesture.translation(in: attachedView).x > 50 { rootBack?() }
+            guard gesture.state == .ended, gesture.translation(in: attachedView).x > 50 else { return }
+            if let navigation = navigation, navigation.viewControllers.count > 1 {
+                navigation.popViewController(animated: true)
+            } else {
+                rootBack?()
+            }
         }
-        deinit { if let edge = edge { attachedView?.removeGestureRecognizer(edge) } }
+        deinit {
+            if let edge = edge { attachedView?.removeGestureRecognizer(edge) }
+            nativePop?.isEnabled = true
+        }
     }
 }

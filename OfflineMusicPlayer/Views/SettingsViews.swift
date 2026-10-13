@@ -55,7 +55,7 @@ struct SettingsView: View {
                 NavigationLink("What's New") { WhatsNewView() }
                 NavigationLink("About Cassette") { AboutView() }
             }
-        }.listStyle(.insetGrouped).environment(\.defaultMinListRowHeight, 44)
+        }.listStyle(.insetGrouped).subtleSeparator().miniPlayerClearance().environment(\.defaultMinListRowHeight, 44)
             .navigationTitle("Settings")
     }
 }
@@ -79,7 +79,7 @@ struct PlaybackSettingsView: View {
                     Text("Off").tag(RepeatMode.off); Text("All Songs").tag(RepeatMode.all); Text("One Song").tag(RepeatMode.one)
                 }
             }
-        }.navigationTitle("Playback").navigationBarTitleDisplayMode(.inline)
+        }.subtleSeparator().miniPlayerClearance().navigationTitle("Playback").navigationBarTitleDisplayMode(.inline)
     }
 }
 struct AppearanceSettingsView: View {
@@ -93,7 +93,7 @@ struct AppearanceSettingsView: View {
                     }.accessibilityValue(appearance == value ? "Selected" : "")
                 }
             } footer: { Text("Use Device Setting follows your iPod's appearance automatically.") }
-        }.listStyle(.insetGrouped).navigationTitle("Appearance").navigationBarTitleDisplayMode(.inline)
+        }.listStyle(.insetGrouped).subtleSeparator().miniPlayerClearance().navigationTitle("Appearance").navigationBarTitleDisplayMode(.inline)
     }
 }
 struct LibraryStatisticsView: View {
@@ -112,7 +112,7 @@ struct LibraryStatisticsView: View {
                 LabeledContentRow(label: "Playlists", value: "\(library.playlists.count)")
                 LabeledContentRow(label: "Enabled Folders", value: "\(library.sources.filter(\.enabled).count)")
             }
-        }.listStyle(.insetGrouped).navigationTitle("Library Statistics").navigationBarTitleDisplayMode(.inline)
+        }.listStyle(.insetGrouped).subtleSeparator().miniPlayerClearance().navigationTitle("Library Statistics").navigationBarTitleDisplayMode(.inline)
     }
     private var listeningTime: String {
         let formatter = DateComponentsFormatter(); formatter.allowedUnits = [.hour, .minute]; formatter.unitsStyle = .abbreviated
@@ -121,7 +121,7 @@ struct LibraryStatisticsView: View {
 }
 struct ArtworkStorageView: View {
     var body: some View {
-        List { ArtworkCacheSection() }.listStyle(.insetGrouped)
+        List { ArtworkCacheSection() }.listStyle(.insetGrouped).subtleSeparator().miniPlayerClearance()
             .navigationTitle("Artwork Cache").navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -163,7 +163,7 @@ struct WhatsNewView: View {
                     Section(notes.sections[index].title) { ForEach(notes.sections[index].items, id: \.self) { Text($0).font(.subheadline) } }
                 }
             } else { Text("Release notes are unavailable for this build.").foregroundColor(.secondary) }
-        }.listStyle(.insetGrouped).navigationTitle("What's New").navigationBarTitleDisplayMode(.inline)
+        }.listStyle(.insetGrouped).subtleSeparator().miniPlayerClearance().navigationTitle("What's New").navigationBarTitleDisplayMode(.inline)
     }
 }
 struct AboutView: View {
@@ -175,6 +175,6 @@ struct AboutView: View {
             Section("Artist Photos") { Text("Free images from Wikimedia, cached offline. Open a photo’s credit from its artist row for the creator, license and original image page.").font(.subheadline).foregroundColor(.secondary) }
             Section("Audio Formats") { Text("Native playback for local audio files. Availability depends on your iOS decoder and file encoding.").font(.subheadline); Text("MP3, M4A/AAC, ALAC, WAV and AIFF are native candidates. FLAC, Ogg and Opus may be unavailable.").font(.subheadline).foregroundColor(.secondary) }
             Section("File Access") { Text("Cassette scans its own Files folder and folders you choose. iOS does not allow unrestricted access to every folder on the device.").font(.subheadline).foregroundColor(.secondary) }
-        }.listStyle(.insetGrouped).navigationTitle("About").navigationBarTitleDisplayMode(.inline)
+        }.listStyle(.insetGrouped).subtleSeparator().miniPlayerClearance().navigationTitle("About").navigationBarTitleDisplayMode(.inline)
     }
 }

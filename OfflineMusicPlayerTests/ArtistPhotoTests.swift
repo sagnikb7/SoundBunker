@@ -21,7 +21,9 @@ final class ArtistPhotoTests: XCTestCase {
         XCTAssertEqual(photo.creator, "Test Creator")
         XCTAssertEqual(photo.license, "CC BY 4.0")
         XCTAssertEqual(photo.sourceURL.host, "commons.wikimedia.org")
-        XCTAssertLessThanOrEqual(try XCTUnwrap(UIImage(contentsOfFile: photo.fileURL.path)).size.width, 160)
+        let cachedWidth = try XCTUnwrap(UIImage(contentsOfFile: photo.fileURL.path)).size.width
+        XCTAssertGreaterThan(cachedWidth, 160)
+        XCTAssertLessThanOrEqual(cachedWidth, 640)
         XCTAssertEqual(ArtistProtocol.count, 3)
         _ = await service.photo(for: "Test Singer")
         XCTAssertEqual(ArtistProtocol.count, 3)

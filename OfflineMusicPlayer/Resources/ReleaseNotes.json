@@ -1,18 +1,11 @@
 {
-  "version": "1.5.3",
+  "version": "1.5.6",
   "sections": [
     {
       "title": "Changed",
       "items": [
-        "Replace the frosted logo with the latest designer-provided retro rainbow cassette across app, widgets and current documentation.",
-        "Document exact scan triggers, folder-check limitations and manual refresh behavior."
-      ]
-    },
-    {
-      "title": "Fixed",
-      "items": [
-        "Skip unchanged startup audio scans using persistent per-directory checkpoints; defer automatic scans while playing or backgrounded.",
-        "Keep external provider rescans explicit and preserve checkpoints across interrupted scans."
+        "Artist pages now fetch and cache higher-resolution photos, while retaining an existing thumbnail if an upgrade fails.",
+        "Recently Played shows each song only once, represented by its latest play."
       ]
     }
   ]
