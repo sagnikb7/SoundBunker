@@ -25,7 +25,6 @@ enum AppIdentity {
 
 struct SettingsView: View {
     @EnvironmentObject private var library: LibraryStore
-    @AppStorage("rememberPlaybackPosition") private var rememberPosition = true
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("artistPhotosEnabled") private var artistPhotosEnabled = true
     var body: some View {
@@ -37,10 +36,9 @@ struct SettingsView: View {
                 NavigationLink("Library Statistics") { LibraryStatisticsView() }
                 if library.scanning { ScanProgressView() }
             } header: { Text("Music Library") } footer: {
-                Text(library.scanning ? library.scanStatus : "Enabled folders are scanned automatically when the app opens.")
+                Text(library.scanning ? library.scanStatus : "Startup checks saved folder timestamps, not every song. Changed local folders scan when playback stops. Rescan refreshes provider folders and edits to existing tags or lyrics.")
             }
             Section("Playback") {
-                Toggle("Remember Position", isOn: $rememberPosition).accessibilityLabel("Remember Playback Position")
                 NavigationLink("Widgets") { WidgetPreviewView() }
                 NavigationLink("Playback Preferences") { PlaybackSettingsView() }
                 Picker("Appearance", selection: $appearance) {
@@ -54,10 +52,8 @@ struct SettingsView: View {
             } header: { Text("Artist Images") } footer: { Text("When Artists is opened, names are sent to Wikipedia/Wikimedia to find free images. Photos are cached for offline use; music and lyrics remain local.") }
             ArtworkCacheSection()
             Section("About") {
-                LabeledContentRow(label: "Version", value: "\(AppIdentity.version) (\(AppIdentity.build))")
                 NavigationLink("What's New") { WhatsNewView() }
                 NavigationLink("About Cassette") { AboutView() }
-                Link("View Project on GitHub", destination: AppIdentity.projectURL)
             }
         }.listStyle(.insetGrouped).environment(\.defaultMinListRowHeight, 44)
             .navigationTitle("Settings")

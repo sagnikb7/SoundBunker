@@ -6,6 +6,57 @@ Every user-facing feature or fix is recorded here when its release build succeed
 
 The build workflow moves pending feature/fix notes into a dated release section after successful packaging.
 
+## 1.5.3 — 13 October 2026
+
+Build: 15.
+
+### Changed
+
+- Replace the frosted logo with the latest designer-provided retro rainbow cassette across app, widgets and current documentation.
+- Document exact scan triggers, folder-check limitations and manual refresh behavior.
+
+### Fixed
+
+- Skip unchanged startup audio scans using persistent per-directory checkpoints; defer automatic scans while playing or backgrounded.
+- Keep external provider rescans explicit and preserve checkpoints across interrupted scans.
+
+## 1.5.2 — 13 October 2026
+
+Build: 14.
+
+### Changed
+
+- Replace the app icon, widget marks and current documentation branding with the designer-provided frosted rainbow cassette.
+- Document local media discovery and widget recovery in README and engineering guides.
+
+## 1.5.1 — 13 October 2026
+
+Build: 13.
+
+### Fixed
+
+- Recover widget snapshots on launch and manual refresh, with a scheduled timeline retry.
+- Bound widget artwork decoding and preserve readable fallback content when covers are unavailable.
+- Keep shared widget snapshots readable after first unlock and expose shared-storage status in Settings.
+
+## 1.5.0 — 13 October 2026
+
+Build: 12.
+
+### Added
+
+- Queue-aware sleep timer with timed, end-of-song and end-of-queue stopping.
+
+### Changed
+
+- Scan once at launch instead of on repeated foreground transitions; coalesce scan updates and reuse unchanged records.
+- Consolidate duplicated Settings links and playback preferences.
+
+### Fixed
+
+- Harden background file access, audio session transitions and incomplete scan handling.
+- Downsample embedded artwork to reduce scan memory pressure.
+
 ## 1.4.1 — 13 October 2026
 
 Build: 11.

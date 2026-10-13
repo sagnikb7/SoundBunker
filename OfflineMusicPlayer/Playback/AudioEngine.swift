@@ -27,7 +27,15 @@ final class NativeAudioEngine: NSObject, AudioEngine, AVAudioPlayerDelegate {
     func load(_ url: URL) throws {
         stop()
         guard url.isFileURL else { throw PlaybackError.localFilesOnly }
-        let candidate = try AVAudioPlayer(contentsOf: url)
+        var candidate: AVAudioPlayer?
+        var coordinationError: NSError?
+        var decoderError: Error?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: .withoutChanges, error: &coordinationError) { file in
+            do { candidate = try AVAudioPlayer(contentsOf: file) }
+            catch { decoderError = error }
+        }
+        if let error = coordinationError ?? (decoderError as NSError?) { throw error }
+        guard let candidate = candidate else { throw PlaybackError.decoderFailed }
         guard candidate.prepareToPlay() else { throw PlaybackError.decoderFailed }
         candidate.delegate = self
         player = candidate
@@ -70,4 +78,20 @@ enum PlaybackError: LocalizedError {
         case .decoderFailed: return "The native decoder could not play this audio file."
         }
     }
+}
+
+/// Preserve error identity while giving file-access failures an actionable explanation.
+func playbackErrorMessage(_ error: Error) -> String {
+    let value = error as NSError
+    if (value.domain == NSOSStatusErrorDomain && value.code == -54) ||
+        (value.domain == NSCocoaErrorDomain && value.code == NSFileReadNoPermissionError) {
+        return "Cassette couldn't read this audio file. Unlock your iPod and try again. For a selected folder, reconnect it in Settings → Music Folders. If it keeps failing, import a fresh local copy into Cassette. (\(value.domain) \(value.code))"
+    }
+    return "\(value.localizedDescription) (\(value.domain) \(value.code))"
+}
+
+func prepareOwnedAudioForBackground(_ url: URL) throws {
+    #if !targetEnvironment(macCatalyst)
+    try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: url.path)
+    #endif
 }

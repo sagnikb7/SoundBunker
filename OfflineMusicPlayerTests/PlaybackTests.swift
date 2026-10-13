@@ -4,6 +4,52 @@ import AVFoundation
 
 final class PlaybackTests: XCTestCase {
     @MainActor
+    func testSleepTimerQueueLimitsBoundariesAndPausedExpiry() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = LibraryStore(documents: root, inMemory: true)
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
+        for name in ["A", "B", "C"] { try FileManager.default.copyItem(at: fixture, to: root.appendingPathComponent(name + ".wav")) }
+        library.rescan(); try await waitForScan(library)
+        let engine = StubEngine()
+        let player = PlaybackCoordinator(engine: engine); player.connect(library)
+        player.play(library.sortedTracks); try await waitForPlayback(player)
+        XCTAssertEqual(try XCTUnwrap(player.remainingQueueDuration), 36, accuracy: 0.01)
+        XCTAssertFalse(player.setSleepTimer(seconds: 37))
+        XCTAssertFalse(player.setSleepTimer(seconds: .nan))
+        XCTAssertTrue(player.setSleepTimer(seconds: 30))
+        player.seek(to: 10)
+        XCTAssertFalse(player.canSetSleepTimer(seconds: 30))
+        player.pause()
+        XCTAssertTrue(player.checkSleepTimer(now: PlaybackCoordinator.sleepTime + 31))
+        XCTAssertNil(player.sleepTimerMode); XCTAssertFalse(player.isPlaying)
+        player.setRepeatMode(.one)
+        XCTAssertTrue(player.setSleepTimer(seconds: 1200))
+        player.setSleepBoundary(.endOfQueue)
+        engine.onCompletion?()
+        XCTAssertEqual(player.queueIndex, 1, "End of queue overrides repeat-one")
+        engine.onCompletion?()
+        XCTAssertEqual(player.queueIndex, 2)
+        engine.onCompletion?()
+        XCTAssertFalse(player.isPlaying); XCTAssertNil(player.sleepTimerMode)
+        player.play(library.sortedTracks); try await waitForPlayback(player)
+        player.setSleepBoundary(.endOfSong); engine.onCompletion?()
+        XCTAssertEqual(player.queueIndex, 0); XCTAssertFalse(player.isPlaying)
+        player.setSleepTimer(seconds: 10)
+        player.play(library.sortedTracks)
+        XCTAssertNil(player.sleepTimerMode, "Replacing a queue cancels its timer")
+        player.pause()
+        XCTAssertTrue(player.setSleepTimer(seconds: 0.05))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertNil(player.sleepTimerMode, "Deadline task expires even while paused")
+    }
+
+    func testPermissionErrorIncludesRecoveryAndOriginalCode() {
+        let message = playbackErrorMessage(NSError(domain: NSOSStatusErrorDomain, code: -54))
+        XCTAssertTrue(message.contains("Unlock")); XCTAssertTrue(message.contains("-54"))
+    }
+
+    @MainActor
     func testHistoryRecordsSuccessfulStartsNotResumeRestoreOrFailure() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

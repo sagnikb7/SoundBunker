@@ -2,11 +2,11 @@
 
 ## Ownership and data flow
 
-The SwiftUI App owns one `LibraryStore` and one `PlaybackCoordinator`. Views read observable state and request actions; they never create independent players. The library loads first, then the player restores its stable-ID queue without starting audio. The root scans on first appearance and throttles foreground full scans to a two-minute interval; concurrent scans are suppressed.
+The SwiftUI App owns one `LibraryStore` and one `PlaybackCoordinator`. Views read observable state and request actions; they never create independent players. The library loads first, then the player restores its stable-ID queue without starting audio. The root checks persisted directory stamps once on first appearance for the owned source. An unchanged checkpoint skips audio enumeration entirely. Missing/changed checkpoints queue a local scan; playback and backgrounding defer/cancel automatic work. Foreground/unlock does not initiate a new check. External providers are scanned only by explicit source/import/rescan actions. Imports scan the owned source; folder changes scan affected sources. Use explicit Rescan Library for Finder/Files changes made during a session; concurrent scans are suppressed.
 
 `LibraryScanner` is an actor with one metadata worker, bounding resource use. It recursively enumerates regular audio candidates, skips hidden files/packages/symlinks, and applies source exclusions before reading metadata. File resource and volume identities deduplicate overlapping roots; separate copies keep separate identities. Size/mtime fingerprints avoid reparsing unchanged files. Results reach the main actor in batches of 25.
 
-`LibraryStore` publishes batch results, saves to Core Data and marks missed files unavailable after a completed scan. Cancelling retains existing state plus already published additions. A failed source retains indexed identities and user data, marks locations unavailable and exposes reconnection. Removing a source only removes its locations; favorites and playlist references remain, and other source memberships continue to work.
+`LibraryStore` publishes batch results, saves to Core Data and marks missed files unavailable only after a complete, error-free enumeration. Cancelling retains existing state plus already published additions. A failed source retains indexed identities and user data, marks locations unavailable and exposes reconnection. Removing a source only removes its locations; favorites and playlist references remain, and other source memberships continue to work.
 
 ## Persistence
 
@@ -70,10 +70,26 @@ The tab bar explicitly uses UIKit system material for both standard and scroll-e
 
 Transport controls arbitrate tap versus hold with a native long-press recognizer. A 0.4-second hold seeks two seconds immediately and every 0.25 seconds thereafter. Existing seek bounds apply without changing songs. Release/cancellation, view teardown and app inactivity stop repetition; VoiceOver has explicit seek actions.
 
-Scanning reports a lightweight checked-audio count after each attempted audio file independently of the 25-track persistence batches. LibraryStore adds each source’s count to the completed-source count so totals do not reset between folders. Shared scan status/cancel UI is present on Settings, Music Folders and folder detail. Library home category counts use the corresponding visible/browse/source collections.
+Scanning coalesces checked-audio progress to at most four updates per second plus completion, independently of 25-changed-track persistence batches. Unchanged tracks never enter persistence batches. Embedded artwork is downsampled directly through ImageIO to bound decoded image size. LibraryStore adds each source’s count to the completed-source count so totals do not reset between folders. Shared scan status/cancel UI is present on Settings, Music Folders and folder detail. Library home category counts use the corresponding visible/browse/source collections.
 
 ## Listening history
 
 Successful engine starts create individual Codable `PlaybackHistoryEntry` records (`history` kind) in the existing LibraryRecord store, without changing its schema, identity or default database path. Each event has its own UUID, track ID and timestamp. New song loads, explicit replays, automatic queue transitions and repeat-one starts record events; pause/resume within a load does not. Silent restore, cancelled activation and failed starts do not record. History resolves current track metadata/artwork and follows source visibility policy; rescanning or exclusion does not delete stored events.
 
 Library displays the newest ten visible events as horizontal song tiles. The Recently Played category and header chevron open the full Listening History list, newest first, with repeated plays preserved and timestamps. Tiles/rows play their selected song. Older installations begin with an empty history; no history is fabricated from import dates or saved queue state. An optional databaseURL initializer argument supports isolated disk-persistence verification; the default path stays unchanged.
+
+## Sleep timer and locked playback
+
+Now Playing exposes a sleep timer in its header. Timed presets validate against known remaining queue duration unless repeat is enabled. Monotonic deadlines include pauses and are checked before resume/advance; a cancellable task checks expiry while the process runs. End-of-song stops at the next natural ending; end-of-queue overrides repeat-one and repeat-all. Queue replacement cancels timers. Timers are intentionally not restored after process termination.
+
+Owned audio is explicitly set to after-first-unlock protection when imported/opened, and the persistent store uses the same policy. External sources retain their provider protection. Decoder opening is coordinated. Pause deactivation checks its generation before touching the session, and media-services reset discards the stale decoder without unexpected playback. Permission errors preserve diagnostic domain/code and provide recovery steps. Physical locked playback and the reported termination still require device verification.
+
+## Widget recovery
+
+The widget provider requests a 30-minute retry rather than a permanent single entry. Launch restoration/manual refresh forces publication even when metadata is unchanged. Snapshot validity is distinct from an empty library; corrupt or missing empty records can be repaired. Shared JSON/covers explicitly remain accessible after first unlock. Artwork identity hashes bytes, and extension-side ImageIO decoding is capped at 320 pixels. The widget never opens the database or audio. Settings reports shared-storage/write status, while actual extension signing and WidgetKit scheduling remain OS-controlled. See [widget verification](../testing/verification/widget-recovery-qa.md).
+
+## Persistent folder checkpoints
+
+`ScanCheckpoint` records live in the existing keyed database (`scanCheckpoint` kind), preserving bundle/storage identity. The scanner records each included directory’s relative path, resource identity and modification timestamp before traversing it. Only complete scans with reliable directory stamps save a checkpoint; incomplete scans retain the previous one. Reading old databases simply yields no checkpoints and one initial owned-source scan.
+
+The scanner actor compares known directory stamps at launch without enumerating songs. Nested additions/removals change the relevant known parent; adding a new folder changes its known ancestor. Editing existing file contents may leave directory stamps unchanged, so tag/lyric edits require manual rescan. No claim of exact filesystem synchronization or provider timestamp reliability is made. Explicit scans bypass playback deferral. Automatic scans cancel when playback starts, retain pending source IDs while deferred and resume when foreground/idle. User Cancel clears pending automatic work.

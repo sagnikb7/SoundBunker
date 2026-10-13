@@ -49,11 +49,13 @@ struct RootView: View {
                 }
             }
             .onAppear {
-                if !launched { launched = true; playback.connect(library); library.rescanIfNeeded(minimumInterval: 0) }
+                if !launched { launched = true; playback.connect(library); library.setPlaybackActive(playback.playbackRequested || playback.isPlaying); library.discoverChangesOnLaunch() }
             }
+            .onChange(of: playback.playbackRequested) { library.setPlaybackActive($0 || playback.isPlaying) }
+            .onChange(of: playback.isPlaying) { library.setPlaybackActive($0 || playback.playbackRequested) }
             .onChange(of: scenePhase) { phase in
-                if phase == .active && launched { library.rescanIfNeeded() }
-                else if phase == .background { playback.persist() }
+                if phase == .active { library.setSceneActive(true); playback.checkSleepTimer() }
+                else if phase == .background { library.setSceneActive(false); playback.persist() }
             }
     }
     @ViewBuilder private var content: some View {

@@ -12,6 +12,10 @@ struct WidgetPreviewView: View {
                 CassetteWidgetCard(snapshot: snapshot, artwork: image, square: true).frame(width: 141, height: 141).cornerRadius(22)
                 Text("Horizontal").font(.footnote.weight(.semibold))
                 CassetteWidgetCard(snapshot: snapshot, artwork: image, square: false).frame(maxWidth: 329).frame(height: 141).cornerRadius(22)
+                Text("Widget status").font(.headline)
+                if let status = playback.widgetStatus { Text(status).font(.footnote).foregroundColor(.secondary) }
+                Button("Refresh Widgets") { playback.refreshWidgets() }.buttonStyle(.bordered)
+                Text("If a widget stays blank after refreshing, remove it from the Home Screen and add it again. Removing a widget does not delete music.").font(.footnote).foregroundColor(.secondary)
                 Text("Add a widget").font(.headline)
                 Text("Touch and hold the Home Screen, tap +, find Cassette, then choose the square or horizontal size.").font(.subheadline)
                 Text("Artwork and track details need both the app and widget signed with the same App Group. A preview here does not confirm widget installation or signing.").font(.footnote).foregroundColor(.secondary)

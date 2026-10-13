@@ -1,9 +1,9 @@
 {
-  "version": "1.4.1",
-  "build": 11,
-  "source_hash": "0e8597fd9b7044563ff45036ba654df25886329ed7cfdb9eed751eb10c48b6d1",
+  "version": "1.5.3",
+  "build": 15,
+  "source_hash": "1b28dc4827af13354ec41b25ed5483bf5c20ac89512d40f2d11787076072d089",
   "pending": null,
   "platform_builds": {
-    "ipod": 11
+    "ipod": 15
   }
 }

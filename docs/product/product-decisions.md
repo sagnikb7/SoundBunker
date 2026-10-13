@@ -2,7 +2,7 @@
 
 ## Cassette identity
 
-The user selected **Cassette** on 12 October 2026. Its mark is an ivory audio cassette with a coral label on a midnight navy/teal background. Public documentation, installed display names, widgets and new artifact names use Cassette. The repository’s exact spelling remains `sagnikb7/casette`.
+The user selected **Cassette** on 12 October 2026. On 13 October 2026, the user supplied a designer-created retro rainbow cassette to replace the original production logo everywhere in the app, widgets and current documentation. The original PNG is preserved without redesign. Public documentation, installed display names, widgets and new artifact names use Cassette. The repository’s exact spelling remains `sagnikb7/casette`.
 
 Internal Xcode target/bundle identifiers and existing database/cache locations remain stable so renaming does not reset users’ data. Original user design references, earlier icon assets and pre-rebrand release/test records remain historical evidence; they are not current branding.
 
@@ -12,7 +12,7 @@ The supplied prototype informs navigation, spacing and system styling; its catal
 
 ## Automatic discovery and restrictions
 
-Scan the app-owned Documents directory and enabled previously granted source roots on opening, and on foreground only after a two-minute full-scan interval. Explicit user rescan/source/import actions bypass the foreground throttle. Skip unchanged metadata by fingerprint; use bounded background work and incremental results. No always-on/background directory watcher is promised.
+Check saved directory timestamps in the app-owned folder once at launch; unchanged folders skip scanning. Changed/missing checkpoints scan only when foregrounded and not playing. Provider roots require explicit refresh. Foreground/unlock does not initiate new checks. Explicit rescans remain available; import/source changes scan affected enabled sources. Skip unchanged metadata by fingerprint; use bounded background work and incremental results. No always-on/background directory watcher is promised.
 
 The On My iPod location is a Files UI grouping, not an unrestricted root. Access to other apps' local folders requires explicit directory selection through Apple's picker. Source switches and excluded subfolder paths allow users to restrict scans. Excluded tracks remain indexed for data preservation but are hidden from library browsing; independent permitted source memberships still work. Reconnection retains restrictions.
 
@@ -28,7 +28,7 @@ On 12 October 2026 the user explicitly requested a free trusted artist-image API
 
 ## Cassette rebrand and widgets
 
-On 12 October 2026 the user renamed the app Cassette and selected the compact artwork/track widget concept (second displayed design). The relevant new icon is an original ivory cassette with a coral label against midnight/teal. Original pre-rebrand icon/reference history is preserved in design assets. The repository was renamed by the user to `sagnikb7/casette`; its spelling is preserved exactly in origin and the project link.
+On 12 October 2026 the user renamed the app Cassette and selected the compact artwork/track widget concept (second displayed design). The initial ivory/coral icon was superseded by the user-supplied retro rainbow design on 13 October 2026. Original pre-rebrand icon/reference history is preserved in design assets. The repository was renamed by the user to `sagnikb7/casette`; its spelling is preserved exactly in origin and the project link.
 
 Only display names, artwork and future artifact prefixes change. Existing `com.local.offlinemusicplayer`, database/schema and private cache paths stay stable. Source IDs are retained while the owned source display name becomes Cassette. A new transfer guide does not delete user documents or the older guide.
 

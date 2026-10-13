@@ -129,6 +129,56 @@ final class PlayerPolishTests: XCTestCase {
     }
 
     @MainActor
+    func testCompactSleepTimerRenderForVisualInspection() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let library = LibraryStore(documents: root, inMemory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "TestTone", withExtension: "wav"))
+        try FileManager.default.copyItem(at: fixture, to: root.appendingPathComponent("Song.wav"))
+        library.rescan(); try await waitForScan(library)
+        let player = PlaybackCoordinator(); player.connect(library)
+        player.play(library.sortedTracks); try await waitForPlayback(player); player.pause()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let parent = try XCTUnwrap(scene.windows.first { $0.isKeyWindow }?.rootViewController)
+        let host = UIHostingController(rootView: SleepTimerView(clock: player.clock).environmentObject(player))
+        parent.addChild(host); parent.view.addSubview(host.view); host.didMove(toParent: parent)
+        defer { host.willMove(toParent: nil); host.view.removeFromSuperview(); host.removeFromParent() }
+        host.overrideUserInterfaceStyle = .light
+        let bounds = CGRect(x: 0, y: 0, width: 320, height: 820)
+        host.view.frame = bounds
+        host.beginAppearanceTransition(true, animated: false); host.endAppearanceTransition()
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 250_000_000)
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in host.view.drawHierarchy(in: bounds, afterScreenUpdates: true) }
+        try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-sleep-timer-320x820.png"))
+    }
+
+    @MainActor
+    func testFullSettingsAndAboutRenderForDuplicateLinkAudit() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let library = LibraryStore(documents: root, inMemory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let player = PlaybackCoordinator(); player.connect(library)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let parent = try XCTUnwrap(scene.windows.first { $0.isKeyWindow }?.rootViewController)
+        for (name, content) in [("settings", AnyView(SettingsView())), ("about", AnyView(AboutView()))] {
+            let host = UIHostingController(rootView: NavigationView { content }.navigationViewStyle(.stack).environmentObject(library).environmentObject(player))
+            parent.addChild(host); parent.view.addSubview(host.view); host.didMove(toParent: parent)
+            host.overrideUserInterfaceStyle = .light
+            let bounds = CGRect(x: 0, y: 0, width: 320, height: 1800)
+            host.view.frame = bounds
+            host.beginAppearanceTransition(true, animated: false); host.endAppearanceTransition()
+            host.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 250_000_000)
+            let format = UIGraphicsImageRendererFormat(); format.scale = 1
+            let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in host.view.drawHierarchy(in: bounds, afterScreenUpdates: true) }
+            try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/Cassette-audit-\(name)-320x1800.png"))
+            host.willMove(toParent: nil); host.view.removeFromSuperview(); host.removeFromParent()
+        }
+    }
+
+    @MainActor
     func testCompactSettingsRenderForVisualInspection() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let library = LibraryStore(documents: root, inMemory: true)

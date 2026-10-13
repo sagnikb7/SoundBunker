@@ -35,3 +35,9 @@ Optional `Track.audioFormat` and `Track.bitrate` fields preserve backward compat
 ## Files and Finder sharing
 
 The iOS Documents path, app identifier and private database paths remain stable. File sharing/open-in-place keys expose Documents in Files and Finder. A small non-audio transfer guide makes the folder discoverable at first launch and is ignored by audio scans. See [transfer steps](../build/ipod-installation.md). Actual provider permission grants and Finder transfers remain physical-device checks.
+
+## Media discovery schedule
+
+Saved records appear immediately. Startup checks persisted directory stamps for the owned source, without enumerating unchanged songs. Changed/missing checkpoints schedule one owned-source scan when foregrounded and not playing. Playback/backgrounding cancels and defers automatic work; explicit user Cancel clears pending work. External/provider roots are not probed automatically. Import scans the owned source, and source mutations scan the affected enabled roots.
+
+Files/Finder changes during a session, provider-folder changes and in-place tag/lyric edits require manual Rescan Library or a per-source scan. Directory timestamps detect structural changes, not every content edit. There is no cloud audio sync, live watcher or interval-based scan. Completed checkpoints persist across launches; interruption does not advance them. Unchanged records bypass merge batches; incomplete enumeration does not mark unseen tracks unavailable.

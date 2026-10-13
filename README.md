@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/design/assets/cassette-icon.png" alt="Cassette app icon — ivory cassette with a coral label" width="144" height="144">
+  <img src="docs/design/assets/cassette-icon.png" alt="Cassette app icon — designer-provided retro rainbow cassette" width="144" height="144">
 </p>
 
 <h1 align="center">Cassette</h1>
@@ -13,7 +13,7 @@
 </p>
 
 [![CI](https://github.com/sagnikb7/casette/actions/workflows/ci.yml/badge.svg)](https://github.com/sagnikb7/casette/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.4.1-FF6338?style=flat-square)](docs/product/changelog.md)
+[![Version](https://img.shields.io/badge/version-1.5.3-FF6338?style=flat-square)](docs/product/changelog.md)
 [![iOS](https://img.shields.io/badge/iOS-15%2B-0B1830?style=flat-square&logo=apple)](docs/build/ipod-installation.md)
 [![macOS](https://img.shields.io/badge/macOS-12%2B-0B1830?style=flat-square&logo=apple)](docs/build/mac-export.md)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-FF6338?style=flat-square&logo=swift&logoColor=white)](docs/engineering/architecture.md)
@@ -51,6 +51,38 @@ These are native UIKit/Catalyst captures at 320-point width using isolated test 
 
 Album art and lyrics remain local. Artist photos are the optional network exception: artist names are sent to Wikipedia/Wikimedia, and credited images are cached offline. See the [metadata and playlist policy](docs/engineering/metadata-and-playlists.md).
 
+## How media sync works
+
+Cassette keeps a local index of your files. “Sync” means discovering and indexing local music; there is no account, cloud music sync, or upload of your audio.
+
+| Action | What Cassette does |
+|---|---|
+| Launch the app | Shows the saved library immediately. Checks timestamps/identities of known directories in Cassette’s own folder; does not enumerate songs when unchanged. |
+| First scan or missing checkpoint after upgrade | Builds a checkpoint with one full local scan. Later unchanged launches skip that scan. |
+| Unlock or return to the app | No new folder check or scan. A previously deferred automatic scan may resume when idle. |
+| Import Audio Files | Copies files into Cassette, then scans only its owned source. |
+| Add/reconnect/enable a folder, or change exclusions | Scans the affected enabled source. These explicit actions may scan during playback. |
+| A known local directory changed before launch | Scans the owned source once, reusing unchanged song metadata. Changes include file additions/removals/renames and newly created subfolders. |
+| Playback starts or app backgrounds | Cancels automatic scan work and defers it. It can resume when foregrounded and playback stops. User-cancelled work does not restart automatically. |
+| Edit existing tags/lyrics, change provider-folder files, or transfer through Files/Finder during a session | Use **Settings → Rescan Library**, or a source’s **Rescan**. No live watcher, periodic polling or provider crawl is used. |
+
+Directory checks cost one metadata lookup per known folder, not one per song. A library with 500 songs inside one album folder needs two directory checks (Cassette plus the album) on an unchanged launch. A changed source still requires enumeration to identify its changes, but unchanged songs skip metadata reads and database merge batches; progress is throttled and artwork is downsampled.
+
+Folder timestamps do not reliably reveal edits inside existing audio or lyric files, and providers may not expose reliable timestamps. Those changes require manual rescan. A checkpoint is saved only after a complete, successful scan; cancellation retains the prior checkpoint and saved library. Missing tracks are marked unavailable only after complete enumeration. Source removal never deletes audio.
+
+Favorites, playlists, history and playback state remain in the private database. Widgets receive only last-played title, artist and a bounded cover through a shared App Group; they never scan your music. See [architecture](docs/engineering/architecture.md) and [metadata and playlists](docs/engineering/metadata-and-playlists.md).
+
+## Recent reliability fixes
+
+- Replaced recurring full startup scans with saved directory checks; unchanged launches skip audio scanning, and automatic scans wait during playback. Reduced scan UI/database work and artwork memory pressure.
+- Hardened file access during locked playback and audio-session transitions; permission error −54 now includes recovery steps. The reported physical iPod termination still needs device verification.
+- Added a queue-aware sleep timer in Now Playing: timed presets, End of Song and End of Queue. Presets longer than a finite queue's remaining duration are disabled; repeat permits longer timed sessions.
+- Consolidated duplicate Settings links and playback preferences.
+- Replaced the app icon and widget marks with the designer’s retro rainbow cassette; the supplied original is preserved in the design assets.
+- Added widget recovery on launch, **Settings → Widgets → Refresh Widgets**, shared-storage status, a periodic timeline retry and bounded artwork decoding. Both sizes retain a visible Cassette fallback if song data or artwork is unavailable. iOS controls refresh timing.
+
+For a black widget, unlock and launch Cassette, open **Settings → Widgets**, then tap **Refresh Widgets**. If it remains black, remove and re-add the Home Screen widget. If shared storage is unavailable, the app and extension need matching provisioned App Groups; an app preview cannot verify extension signing or Home Screen execution. See [widget recovery and verification](docs/testing/verification/widget-recovery-qa.md). These changes address identified failure paths; the reported black widgets still require an on-device retest.
+
 ## Build
 
 Requires macOS and full Xcode. Open `OfflineMusicPlayer.xcodeproj` and use the **OfflineMusicPlayer** scheme, or run the launcher from the repository root:
@@ -67,7 +99,7 @@ Plain `./build`, “build” or “create build” defaults to iPod. Codex also 
 
 | Platform | Generated artifacts | Last verified export |
 |---|---|---|
-| iPod | `dist/Cassette-unsigned-<version>.ipa` and `.ipa.zip` | **1.4.1 (11)** |
+| iPod | `dist/Cassette-unsigned-<version>.ipa` and `.ipa.zip` | **1.5.3 (15)** |
 | Mac | `dist/Cassette-<version>-mac.app` and `.app.zip` | **1.3.0 (9)** |
 
 The launcher validates architecture, platform, minimum OS, embedded resources, versions and archive integrity before finalizing release notes. Builds run sequentially under a lock. Exporting the other platform from unchanged sources reuses the version/build; rebuilding an already-exported platform increments the build number. Failed retries do not consume versions. Packages stay outside Git.
@@ -89,13 +121,13 @@ xcodebuild -project OfflineMusicPlayer.xcodeproj -scheme OfflineMusicPlayer \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual test
 ```
 
-The current pre-push suite passed **41 native tests** and **18 workflow tests**, including the latest gesture, count-alignment and branding cleanup. [Testing](docs/testing/testing.md) records the commands, results and remaining device checks. The CI badge links to [Cassette QA](docs/build/continuous-integration.md); hosted CI status is independent of local results.
+The current pre-push suite passed **53 native tests** and **18 workflow tests**, including 500-file scan reuse, incomplete-scan preservation, sleep-timer behavior and widget recovery. [Testing](docs/testing/testing.md) records the commands, results and remaining device checks. The CI badge links to [Cassette QA](docs/build/continuous-integration.md); hosted CI status is independent of local results.
 
 ## Documentation
 
 | Topic | Guides |
 |---|---|
-| Product | [Specification](docs/product/offline-music-player-spec.md) · [Decisions](docs/product/product-decisions.md) · [Roadmap](docs/product/roadmap.md) · [Changelog](docs/product/changelog.md) |
+| Product | [Specification](docs/product/offline-music-player-spec.md) · [Library reliability and sleep timer](docs/product/library-reliability-and-sleep-timer.md) · [Decisions](docs/product/product-decisions.md) · [Roadmap](docs/product/roadmap.md) · [Changelog](docs/product/changelog.md) |
 | Engineering | [Architecture](docs/engineering/architecture.md) · [Implementation plan](docs/engineering/implementation-plan.md) · [Metadata and playlists](docs/engineering/metadata-and-playlists.md) |
 | Design | [Prototype mapping](docs/design/prototype-mapping.md) · [Cassette widgets and branding](docs/design/cassette-widgets.md) · [Native UI QA](docs/design/native-ui-qa.md) |
 | Build | [Artifacts](docs/build/build-artifacts.md) · [Versioning](docs/build/versioning.md) · [iPod installation](docs/build/ipod-installation.md) · [Mac export](docs/build/mac-export.md) · [CI](docs/build/continuous-integration.md) |

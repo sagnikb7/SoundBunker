@@ -27,6 +27,15 @@ final class LibraryStore: ObservableObject {
     private var browseCache: BrowseIndex?
     private var artworkNeedsTrim = false
     private var lastScan = Date.distantPast
+    private var checkpoints: [UUID: ScanCheckpoint] = [:]
+    private var discoveryStarted = false
+    private var discoveryTask: Task<Void, Never>?
+    private var pendingAutomaticSources = Set<UUID>()
+    private var automaticSources = Set<UUID>()
+    private var playbackActive = false
+    private var sceneActive = true
+    @Published private(set) var checkingFolders = false
+    private(set) var scanRunCount = 0
     private var resolvedRoots: [UUID: URL] = [:]
     private enum FolderChange { case add(MusicSource, FolderAccess), remove(UUID) }
     private var folderChanges: [FolderChange] = []
@@ -54,13 +63,14 @@ final class LibraryStore: ObservableObject {
                 Other apps can use the Files picker to copy audio into this folder.
                 On your Mac: connect and unlock the iPod, trust this computer, open Finder,
                 select the iPod → Files → Cassette, and drag your audio files into the app.
-                Music is scanned when Cassette opens. Use Settings → Rescan Library for immediate discovery.
+                Cassette checks saved folder timestamps at launch and scans only changed music folders. Use Settings → Rescan Library for immediate discovery.
                 Keep M3U playlists and LRC lyrics alongside the audio using their relative paths.
                 Your playlists and favorites are stored privately; deleting this guide does not affect them.
                 """.write(to: guide, atomically: true, encoding: .utf8)
             }
             try fm.createDirectory(at: artworkDirectory, withIntermediateDirectories: true)
             database = try LibraryDatabase(inMemory: inMemory, storeURL: databaseURL)
+            checkpoints = Dictionary(uniqueKeysWithValues: try database!.all("scanCheckpoint", as: ScanCheckpoint.self).map { ($0.sourceID, $0) })
             tracks = try database!.all("track", as: Track.self)
             trackLookup = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
             sources = try database!.all("source", as: MusicSource.self)
@@ -130,7 +140,7 @@ final class LibraryStore: ObservableObject {
                 return nil
             }.first
             let duplicate = queued ?? sources.first { (try? sourceURL($0).resolvingSymlinksInPath().standardizedFileURL) == canonical }
-            if duplicate?.isOwned == true { rescanIfNeeded(minimumInterval: 0); return }
+            if let duplicate = duplicate, duplicate.isOwned { rescan(only: duplicate.id); return }
             if let duplicate = duplicate, let id = reconnecting, duplicate.id != id {
                 errorMessage = "This folder is already in your library."; return
             }
@@ -146,15 +156,16 @@ final class LibraryStore: ObservableObject {
         else if !clearingArtwork { applyFolderChanges() }
     }
     private func finishScan() {
-        scanning = false; scanTask = nil
+        scanning = false; scanTask = nil; automaticSources.removeAll()
         for id in firstScanGrants.keys { resolvedRoots[id] = nil }
         firstScanGrants.removeAll()
         applyFolderChanges()
+        resumeAutomaticScan()
     }
     private func applyFolderChanges() {
         guard !busy, !folderChanges.isEmpty else { return }
         let changes = folderChanges; folderChanges.removeAll()
-        var shouldScan = false
+        var scanIDs = Set<UUID>()
         for change in changes {
             do {
                 switch change {
@@ -164,7 +175,7 @@ final class LibraryStore: ObservableObject {
                     else { sources.append(source) }
                     resolvedRoots[source.id] = grant.url
                     firstScanGrants[source.id] = grant
-                    shouldScan = shouldScan || source.enabled
+                    if source.enabled { scanIDs.insert(source.id) }
                 case .remove(let id):
                     guard sources.contains(where: { $0.id == id && !$0.isOwned }) else { continue }
                     var updated = tracks
@@ -172,6 +183,8 @@ final class LibraryStore: ObservableObject {
                         updated[index].locations.removeAll { $0.sourceID == id }
                         if updated[index] != tracks[index] { try database?.save(updated[index], key: "track:\(updated[index].id)", kind: "track") }
                     }
+                    checkpoints[id] = nil
+                    try database?.remove(key: "checkpoint:\(id)")
                     try database?.remove(key: "source:\(id)"); try database?.commit()
                     sources.removeAll { $0.id == id }
                     resolvedRoots[id] = nil; firstScanGrants[id] = nil
@@ -179,7 +192,7 @@ final class LibraryStore: ObservableObject {
                 }
             } catch { database?.container.viewContext.rollback(); errorMessage = "Couldn't update music folders: \(error.localizedDescription)" }
         }
-        if shouldScan { rescan() }
+        if !scanIDs.isEmpty { rescan(sourceIDs: scanIDs) }
         else {
             for id in firstScanGrants.keys { resolvedRoots[id] = nil }
             firstScanGrants.removeAll()
@@ -210,6 +223,7 @@ final class LibraryStore: ObservableObject {
                             do { try FileManager.default.copyItem(at: source, to: target) } catch { copyError = error }
                         }
                         if let error = coordinationError ?? (copyError as NSError?) { throw error }
+                        try prepareOwnedAudioForBackground(target)
                         // Explicit file import also preserves an adjacent local lyric file when accessible.
                         let lrc = url.deletingPathExtension().appendingPathExtension("lrc")
                         if FileManager.default.fileExists(atPath: lrc.path), (try? LocalFilePolicy.check(lrc)) != nil {
@@ -224,8 +238,53 @@ final class LibraryStore: ObservableObject {
             if !result.isEmpty { errorMessage = result.prefix(5).joined(separator: "\n") }
             if cancelled { scanStatus = "Import cancelled" }
             finishScan()
-            if !cancelled { rescan() }
+            if !cancelled, let owned = sources.first(where: { $0.isOwned }) { rescan(only: owned.id) }
         }
+    }
+
+    /// One cheap startup check of app-owned directories; provider roots require explicit actions.
+    func discoverChangesOnLaunch() {
+        guard !discoveryStarted else { return }
+        discoveryStarted = true
+        checkingFolders = true
+        discoveryTask = Task(priority: .utility) {
+            defer { checkingFolders = false; discoveryTask = nil }
+            for source in sources where source.isOwned && source.enabled {
+                do {
+                    try Task.checkCancellation()
+                    let changed: Bool
+                    if let checkpoint = checkpoints[source.id], checkpoint.excludedPaths == source.excludedPaths {
+                        changed = try await scanner.directoriesChanged(root: documents, checkpoint: checkpoint)
+                    } else { changed = true }
+                    try Task.checkCancellation()
+                    if changed { pendingAutomaticSources.insert(source.id) }
+                } catch is CancellationError { return }
+                catch { scanStatus = "Folder check unavailable. Use Rescan Library to retry." }
+            }
+            resumeAutomaticScan()
+        }
+    }
+    func setPlaybackActive(_ active: Bool) {
+        playbackActive = active
+        if active && !automaticSources.isEmpty {
+            pendingAutomaticSources.formUnion(automaticSources); scanTask?.cancel()
+        } else if !active { resumeAutomaticScan() }
+    }
+    func setSceneActive(_ active: Bool) {
+        sceneActive = active
+        if !active {
+            pendingAutomaticSources.formUnion(automaticSources); scanTask?.cancel()
+        } else { resumeAutomaticScan() }
+    }
+    private func resumeAutomaticScan() {
+        guard !pendingAutomaticSources.isEmpty else { return }
+        guard sceneActive, !playbackActive, !busy else {
+            if !busy { scanStatus = "Music changes found. Automatic scan waits until playback stops." }
+            return
+        }
+        let ids = pendingAutomaticSources
+        pendingAutomaticSources.removeAll()
+        rescan(sourceIDs: ids, automatic: true)
     }
 
     func rescanIfNeeded(minimumInterval: TimeInterval = 120) {
@@ -238,11 +297,18 @@ final class LibraryStore: ObservableObject {
         browseCache = value; return value
     }
     func rescan(only id: UUID? = nil) {
+        rescan(sourceIDs: id.map { [$0] })
+    }
+    private func rescan(sourceIDs: Set<UUID>?, automatic: Bool = false) {
         guard !busy, database != nil else { return }
-        let selected = sources.filter { $0.enabled && (id == nil || $0.id == id) }
+        let selected = sources.filter { $0.enabled && (sourceIDs == nil || sourceIDs!.contains($0.id)) }
+        guard !selected.isEmpty else { return }
+        if !automatic { discoveryTask?.cancel(); pendingAutomaticSources.subtract(selected.map(\.id)) }
+        automaticSources = automatic ? Set(selected.map(\.id)) : []
+        scanRunCount += 1
         scanning = true; scannedCount = 0; scanStatus = "Preparing scan…"
-        if id == nil { lastScan = Date() }
-        scanTask = Task {
+        if sourceIDs == nil { lastScan = Date() }
+        scanTask = Task(priority: .utility) {
             defer { finishScan() }
             for var source in selected {
                 if Task.isCancelled { scanStatus = "Scan cancelled"; break }
@@ -262,14 +328,20 @@ final class LibraryStore: ObservableObject {
                     var updated = tracks
                     var changed = false
                     for index in updated.indices {
-                        guard !result.seen.contains(updated[index].id), updated[index].locations.contains(where: { $0.sourceID == source.id && $0.available }) else { continue }
+                        guard result.complete, !result.seen.contains(updated[index].id), updated[index].locations.contains(where: { $0.sourceID == source.id && $0.available }) else { continue }
                         for location in updated[index].locations.indices where updated[index].locations[location].sourceID == source.id { updated[index].locations[location].available = false }
                         changed = true
                         try database?.save(updated[index], key: "track:\(updated[index].id)", kind: "track")
                     }
                     if changed { tracks = updated }
                     try mergeImportedPlaylists(result.playlists, source: source)
-                    source.needsReconnect = false; update(source); try save(source)
+                    if result.complete && result.directoryCheckReliable {
+                        let checkpoint = ScanCheckpoint(sourceID: source.id, excludedPaths: source.excludedPaths, directories: result.directories)
+                        try database?.save(checkpoint, key: "checkpoint:\(source.id)", kind: "scanCheckpoint")
+                        try database?.commit()
+                        checkpoints[source.id] = checkpoint
+                    }
+                    if source.needsReconnect { source.needsReconnect = false; update(source); try save(source) }
                     try database?.commit()
                     scanStatus = "\(scannedCount) files checked\(result.skipped > 0 ? "; \(result.skipped) unavailable" : "")"
                     if !result.issues.isEmpty { errorMessage = result.issues.prefix(5).joined(separator: "\n") }
@@ -313,7 +385,7 @@ final class LibraryStore: ObservableObject {
         }
         if changed { try database?.commit(); playlists = updated }
     }
-    private func updateScanCount(_ count: Int) { scannedCount = count }
+    private func updateScanCount(_ count: Int) { if scannedCount != count { scannedCount = count } }
 
     private func receive(_ batch: [Track], count: Int) {
         do {
@@ -332,7 +404,7 @@ final class LibraryStore: ObservableObject {
             }
             try database?.commit()
             if changed { tracks = updated }
-            scannedCount = count
+            updateScanCount(count)
         } catch { errorMessage = "Couldn't save scan results: \(error.localizedDescription)"; scanTask?.cancel() }
     }
     func setEnabled(_ id: UUID, enabled: Bool) {
@@ -370,7 +442,7 @@ final class LibraryStore: ObservableObject {
             try save(source)
         } catch { errorMessage = error.localizedDescription }
     }
-    func cancelScan() { scanTask?.cancel() }
+    func cancelScan() { pendingAutomaticSources.removeAll(); discoveryTask?.cancel(); scanTask?.cancel() }
     func removeSource(_ source: MusicSource) {
         guard !source.isOwned else { errorMessage = "Cassette’s own folder cannot be removed. Turn off scanning instead."; return }
         queueFolderChange(.remove(source.id))

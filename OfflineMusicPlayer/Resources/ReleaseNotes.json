@@ -1,10 +1,18 @@
 {
-  "version": "1.4.1",
+  "version": "1.5.3",
   "sections": [
     {
       "title": "Changed",
       "items": [
-        "Refresh Cassette project branding with the production logo, polished README badges and screenshots, current release details and clearly separated historical documentation."
+        "Replace the frosted logo with the latest designer-provided retro rainbow cassette across app, widgets and current documentation.",
+        "Document exact scan triggers, folder-check limitations and manual refresh behavior."
+      ]
+    },
+    {
+      "title": "Fixed",
+      "items": [
+        "Skip unchanged startup audio scans using persistent per-directory checkpoints; defer automatic scans while playing or backgrounded.",
+        "Keep external provider rescans explicit and preserve checkpoints across interrupted scans."
       ]
     }
   ]

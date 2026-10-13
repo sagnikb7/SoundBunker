@@ -1,27 +1,25 @@
 # Final build verification
 
-Date: 13 October 2026. **Cassette 1.4.1 (11)** exported with `./build --platform=ipod` after the branding/documentation cleanup. Includes Cassette icon/widgets, player/folder improvements, persistent Recently Played/history, artwork double-tap and right-aligned list counts. README now uses the production Cassette logo, badges, screenshots and current release information; historical evidence is clearly separated.
+13 October 2026: **Cassette 1.5.3 (15)** exported with `./build --platform=ipod`. Includes persistent directory checkpoints for cached-first startup and the latest user-supplied Retro Rainbow Cassette Icon.
 
-## Release and pre-push gates
+## Executed checks
 
-- Native Release Catalyst: **41 tests, 0 failures, TEST SUCCEEDED** (`/tmp/cassette-branding-native-tests.log`).
-- Python workflow suite: **18 tests, 0 failures** (`/tmp/cassette-branding-workflow.log`).
-- Release iPhoneOS build: **BUILD SUCCEEDED**; iPhoneOS static analysis: **ANALYZE SUCCEEDED** (`/tmp/cassette-branding-ipod-release.log`, `/tmp/cassette-branding-analysis.log`).
-- Generated Xcode project is byte-identical after regeneration. README local image/link targets and production-logo parity passed. Repository/Markdown links and whitespace checks passed.
-- App/widget: arm64, IOS platform, minimum iOS 15.0; matching **1.4.1 (11)** version/build, expected identities/extension point, app icon/widget assets and matching bundled notes/project metadata.
-- IPA and ZIP integrity passed. Every IPA file is byte-identical to the built bundle; ZIP contains exactly the identical versioned IPA. Test media/XCTest bundles are absent.
-- Release manifest/changelog finalized after successful packaging. Both outputs are unsigned; signing/provisioning and matching widget App Group entitlements are required before installation.
+- Native Release Catalyst: **53 tests, zero failures**, including 500-song disk-backed restart with zero audio scans, nested additions, deferred playback/background discovery, explicit cancellation, retained checkpoints, manual lyric edits and provider refresh. See [scan evidence](incremental-scan-qa.md).
+- Release tooling: **18 tests, zero failures**.
+- Supplied retro PNG preserved byte-for-byte. App/README icons are identical opaque 1024px assets; app/widget marks are identical opaque 64px assets. Current square/medium widget captures inspected with the new logo.
+- Release iPhoneOS build and repository/package QA passed. App and widget are arm64, IOS, minimum iOS 15.0, matching 1.5.3 (15); expected identities, embedded resources and no test media/XCTest bundles.
+- Both IPA and ZIP pass archive checks. All IPA payload bytes match the built app. Outer ZIP contains the identical IPA.
+- Source release notes staged before compilation and finalized after packaging. README, architecture, product decisions, media discovery policy and test documents reflect the new triggers.
 
 ## Artifacts and limits
 
-- `dist/Cassette-unsigned-1.4.1.ipa`
-- `dist/Cassette-unsigned-1.4.1.ipa.zip`
+`dist/Cassette-unsigned-1.5.3.ipa` and `dist/Cassette-unsigned-1.5.3.ipa.zip` are unsigned. Signing/provisioning, including matching widget App Groups, is required before installation. No upload, transfer or installation occurred. Last Mac export remains 1.3.0 (9); the shared source is updated for the next Mac build.
 
-Last Mac export remains **1.3.0 (9)**; no new Mac export was requested. Earlier receipts: [1.4.0 iPod export](archive/cassette-1.4.0-build.md), [1.3.0 platform exports](archive/cassette-1.3.0-build.md).
+Initial upgrade requires one successful owned-source scan to establish checkpoints. Afterwards unchanged launches check known directory metadata without enumerating songs. Providers, in-place tag/lyric edits and Files/Finder changes during the same session require explicit rescan. Physical iPod/A10 performance, the reported lock-screen termination and black-widget behavior remain unverified. Desktop tests are not device certification. The [1.5.2 installed Settings discrepancy](release-1.5.2-audit.md) also remains an open device report.
 
-Native desktop tests, renders and successful compilation do not certify physical iPod interaction, installation, provider permissions, codecs, background playback or A10 performance. No package upload, sync, transfer or installation was performed. This receipt records local verification; GitHub-hosted CI is a separate run.
+Logs outside Git: `/tmp/cassette-incremental-scan-tests.log`, `/tmp/cassette-incremental-workflow-tests.log`, `/tmp/cassette-incremental-ipod-build.log`. Prior receipt: [1.5.2](archive/cassette-1.5.2-build.md).
 
 ## SHA-256
 
-- `Cassette-unsigned-1.4.1.ipa`: `391096ae081797d82af27d76b9ec81ebb4d2a05b996a0d58abd511e4d87aa13c`
-- `Cassette-unsigned-1.4.1.ipa.zip`: `f98c04186c59f4a67ba639c02bc75362527d9bcc7eb2d46c0d3f4ba063f96308`
+- IPA: `607e400f0eb385bab2ac218ee45add52dd1cdeece85dcc93f308db4e271c0d03`
+- ZIP: `7302742bec85867c8c6a72559e41d0c121ea53c19945d9350aba9417844f2982`

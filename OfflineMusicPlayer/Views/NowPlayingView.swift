@@ -42,6 +42,7 @@ private struct NowPlayingContent: View {
     init(clock: PlaybackClock, initialMode: NowPlayingMode) { self.clock = clock; _mode = State(initialValue: initialMode) }
     @State private var scrubPosition: Double = 0
     @State private var isScrubbing = false
+    @State private var showingSleepTimer = false
     @State private var playlistTrack: Track?
     @State private var destination: PlayerDestination?
     @State private var lyricLines: [LyricLine] = []
@@ -90,6 +91,7 @@ private struct NowPlayingContent: View {
                     .background(BackGestureSupport(rootBack: { destination = nil }))
             }.navigationViewStyle(.stack)
         }
+        .sheet(isPresented: $showingSleepTimer) { SleepTimerView(clock: playback.clock).environmentObject(playback) }
         .sheet(item: $playlistTrack) { track in
             AddToPlaylistView(track: track).environmentObject(library)
         }
@@ -108,6 +110,11 @@ private struct NowPlayingContent: View {
                     Image(systemName: "chevron.down").frame(width: 52, height: 52, alignment: .leading).contentShape(Rectangle())
                 }.accessibilityLabel("Dismiss Now Playing")
                 Spacer(minLength: 0)
+                Button { showingSleepTimer = true } label: {
+                    Image(systemName: playback.sleepTimerMode == nil ? "moon" : "moon.fill")
+                        .foregroundColor(playback.sleepTimerMode == nil ? .primary : .blue)
+                        .frame(width: 52, height: 52)
+                }.accessibilityLabel(playback.sleepTimerLabel)
             }
         }.frame(minHeight: 52)
     }
@@ -223,4 +230,40 @@ private struct NowPlayingContent: View {
         }
     }
     private func time(_ seconds: Double) -> String { let value = Int(max(0, seconds.isFinite ? seconds : 0)); return String(format: "%d:%02d", value / 60, value % 60) }
+}
+
+struct SleepTimerView: View {
+    @ObservedObject var clock: PlaybackClock
+    @EnvironmentObject private var playback: PlaybackCoordinator
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    if playback.sleepTimerMode != nil { Text(playback.sleepTimerLabel).font(.headline) }
+                    if let remaining = playback.remainingQueueDuration {
+                        Text("Queue remaining: " + String(format: "%d:%02d", Int(remaining) / 60, Int(remaining) % 60)).foregroundColor(.secondary)
+                    } else { Text("Queue length is unknown. Choose an end-of-song or end-of-queue timer.").foregroundColor(.secondary) }
+                }
+                Section {
+                    Button("End of Song") { playback.setSleepBoundary(.endOfSong); dismiss() }
+                    Button("End of Queue") { playback.setSleepBoundary(.endOfQueue); dismiss() }
+                } footer: { Text("End of Song stops at the next song ending. End of Queue plays through once, overriding repeat.") }
+                if playback.sleepTimerMode != nil {
+                    Button("Cancel Sleep Timer", role: .destructive) { playback.cancelSleepTimer(); dismiss() }
+                }
+                Section {
+                    ForEach([5, 10, 15, 20, 30, 45, 60], id: \.self) { minutes in
+                        Button("\(minutes) minutes") {
+                            if playback.setSleepTimer(seconds: Double(minutes * 60)) { dismiss() }
+                        }.disabled(!playback.canSetSleepTimer(seconds: Double(minutes * 60)))
+                    }
+                } header: { Text("Stop After") } footer: {
+                    Text(playback.repeatMode == .off ? "Timers longer than the remaining queue are unavailable. The countdown includes pauses; playback may stop earlier if you shorten the queue." : "Repeat is on, so timed sessions can outlast the queue. The countdown includes pauses.")
+                }
+
+            }.navigationTitle("Sleep Timer").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }.navigationViewStyle(.stack).tint(.blue)
+    }
 }

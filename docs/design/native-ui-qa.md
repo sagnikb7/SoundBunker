@@ -1,6 +1,6 @@
 # Cassette native UI verification
 
-Current evidence reviewed on 13 October 2026. Cassette uses its ivory/coral cassette icon on midnight navy/teal. The original prototypes and pre-rebrand evidence are retained separately in [historical native UI QA](../testing/verification/archive/native-ui-pre-cassette.md).
+Current evidence reviewed on 13 October 2026. Cassette uses the designer-provided retro rainbow cassette icon. The original prototypes and pre-rebrand evidence are retained separately in [historical native UI QA](../testing/verification/archive/native-ui-pre-cassette.md).
 
 ## Current compact renders
 

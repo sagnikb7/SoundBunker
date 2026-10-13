@@ -20,6 +20,7 @@ Record every shipped feature/fix in `release/version.json` pending notes before 
 ## Documentation map
 
 - Entry point and project layout: [README.md](README.md).
+- Reliability and sleep timer: [plan and acceptance](docs/product/library-reliability-and-sleep-timer.md).
 - Original requirements: [docs/product/offline-music-player-spec.md](docs/product/offline-music-player-spec.md).
 - Release history: [docs/product/changelog.md](docs/product/changelog.md).
 - GitHub CI and artifact downloads: [docs/build/continuous-integration.md](docs/build/continuous-integration.md).
@@ -30,6 +31,8 @@ Record every shipped feature/fix in `release/version.json` pending notes before 
 - Implementation status and remaining work: [docs/engineering/implementation-plan.md](docs/engineering/implementation-plan.md).
 - Components, persistence, access and playback: [docs/engineering/architecture.md](docs/engineering/architecture.md).
 - Visual reference mapping: [docs/design/prototype-mapping.md](docs/design/prototype-mapping.md).
+- Incremental scanning: [verification and limits](docs/testing/verification/incremental-scan-qa.md).
+- Widget recovery: [verification and device checks](docs/testing/verification/widget-recovery-qa.md).
 - Cassette widgets/signing/branding: [docs/design/cassette-widgets.md](docs/design/cassette-widgets.md).
 - Native UI verification: [docs/design/native-ui-qa.md](docs/design/native-ui-qa.md).
 - Test commands, results and physical QA: [docs/testing/testing.md](docs/testing/testing.md).

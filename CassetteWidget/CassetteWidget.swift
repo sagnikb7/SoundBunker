@@ -11,13 +11,15 @@ struct CassetteProvider: TimelineProvider {
     func placeholder(in context: Context) -> CassetteEntry { CassetteEntry(date: Date(), snapshot: .empty, artwork: nil) }
     func getSnapshot(in context: Context, completion: @escaping (CassetteEntry) -> Void) { completion(entry()) }
     func getTimeline(in context: Context, completion: @escaping (Timeline<CassetteEntry>) -> Void) {
-        // Last-played state changes discretely. The app requests a reload only after a changed snapshot write.
-        completion(Timeline(entries: [entry()], policy: .never))
+        // Recovery opportunity if a reload was missed or storage was temporarily inaccessible.
+        // WidgetKit owns actual scheduling; this is not a background polling timer.
+        let current = entry()
+        completion(Timeline(entries: [current], policy: .after(CassetteWidgetConfiguration.retryDate(after: current.date))))
     }
     private func entry() -> CassetteEntry {
         let directory = CassetteWidgetConfiguration.directory
         let snapshot = CassetteWidgetConfiguration.read(from: directory)
-        let image = snapshot.artworkName.flatMap { name in directory.flatMap { UIImage(contentsOfFile: $0.appendingPathComponent(name).path) } }
+        let image = CassetteWidgetConfiguration.artwork(for: snapshot, in: directory)
         return CassetteEntry(date: Date(), snapshot: snapshot, artwork: image)
     }
 }

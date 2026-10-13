@@ -27,7 +27,7 @@ Coverage:
 - Queue transitions, repeat-one, silent state restoration and unavailable-file recovery.
 - Rejection of remote playback URLs.
 
-Tests use temporary fixture folders and isolated databases/caches. Native WAV playback is executed on the Mac runtime; this is not an iPod codec certification. The initial runs caught metadata-reader and canonical-path errors, which were repaired before the final run. **Latest native result: 32 tests executed, 0 failures, TEST SUCCEEDED (Release Catalyst).** Final receipts are in `verification/`.
+Tests use temporary fixture folders and isolated databases/caches. Native WAV playback is executed on the Mac runtime; this is not an iPod codec certification. The initial runs caught metadata-reader and canonical-path errors, which were repaired before the final run. **Latest native result: 53 tests executed, 0 failures, TEST SUCCEEDED (Release Catalyst, 13 October 2026).** Final receipts are in `verification/`.
 
 ## Device build and packaging
 
@@ -135,3 +135,25 @@ Library category counts and playlist song counts now sit on the trailing edge be
 ## Cassette branding pre-push checks — 13 October 2026
 
 The current source passes all **41 native Release Catalyst tests** and **18 Python workflow tests**. README local HTML image/link targets and production-logo byte parity passed; Markdown links pass repository QA. Test scratch/output paths now use Cassette. The Xcode project regenerates byte-identically. Current logo/docs are separated from archived pre-rebrand evidence; bundle IDs and private persistence/cache paths remain unchanged. Logs: `/tmp/cassette-branding-native-tests.log` and `/tmp/cassette-branding-workflow.log`. Build/static-analysis/package results are in the [latest receipt](verification/final-build.md).
+
+## Library reliability and sleep timer — 13 October 2026
+
+Final Release Catalyst suite: **46 tests, zero failures**. Python workflow suite: **18 tests, zero failures**. New regressions cover 500-file unchanged rescans with zero track batches and throttled progress, preservation of missing entries after incomplete enumeration, finite queue timer limits, repeat boundary overrides, pause expiry, replacement cancellation and permission recovery copy. The timer uses continuous monotonic time including device sleep. Compact timer rendering was inspected at 320-point width; boundary options appear before duration presets. The test uses a 12-second WAV; disabled minute presets in the capture are expected.
+
+Logs remain outside Git: `/tmp/cassette-reliability-tests.log`, `/tmp/cassette-workflow-tests.log`. Specification and device gates: [Library reliability and sleep timer](../product/library-reliability-and-sleep-timer.md). No physical lock-screen crash reproduction or A10 profiling has been performed. The reported termination is not certified fixed.
+
+## Widget recovery — 13 October 2026
+
+Release Catalyst: **48 tests, zero failures**; workflow suite: **18 tests, zero failures**. Added empty/corrupt snapshot repair and forced publication, bounded artwork decoding, unsafe/broken cover fallback and content-based cover identity checks. Inspected both square and medium empty-state renders: title, icon and library prompt are visible. Captures and logs remain outside Git (`/tmp/Cassette-widget-empty.png`, `/tmp/Cassette-widget-empty-horizontal.png`, `/tmp/cassette-widget-recovery-tests.log`, `/tmp/cassette-widget-workflow-tests.log`). [Widget recovery QA](verification/widget-recovery-qa.md) records findings and device acceptance. The iOS WidgetKit host and reported black widgets have not been reproduced on the physical iPod.
+
+## Designer logo verification — 13 October 2026
+
+The 1254×1254 supplied PNG is preserved byte-for-byte. App/README production icons match at 1024×1024 with no alpha; app/extension widget marks match at 64×64 with no alpha. The asset change was followed by **six widget tests, zero failures** and visual inspection of the regenerated square/medium renders, which show the new mark. Current widget screenshots were refreshed in verification docs. Log: `/tmp/cassette-designer-logo-tests.log`. No re-generation, crop or recoloring of the designer artwork occurred.
+
+## Installed-build discrepancy audit
+
+The user reports duplicate Settings/About GitHub links on 1.5.2 (14). Full-height native renders and direct exported-IPA label checks do not reproduce it; the installed-device mismatch remains unresolved. See the [claims and evidence audit](verification/release-1.5.2-audit.md).
+
+## Persistent directory discovery and retro logo
+
+The latest suite passes **53 native tests** and **18 workflow tests**, including disk-backed 500-song zero-scan restart, nested additions, playback/background deferral, cancellation, explicit provider refresh and in-place lyric edits. See [incremental scan evidence and limits](verification/incremental-scan-qa.md). Current widget captures use the latest retro rainbow artwork.

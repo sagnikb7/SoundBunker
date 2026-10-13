@@ -1,5 +1,6 @@
 import AVFoundation
 import UIKit
+import ImageIO
 
 struct ScanResult {
     var tracks: [Track]
@@ -7,6 +8,9 @@ struct ScanResult {
     var skipped: Int
     var issues: [String]
     var playlists: [ScannedPlaylist] = []
+    var complete = true
+    var directories: [DirectoryStamp] = []
+    var directoryCheckReliable = true
 }
 
 enum LocalFilePolicy {
@@ -34,14 +38,45 @@ enum LocalFilePolicy {
     }
 }
 
+/// Saved only after a complete scan. Folder checks never enumerate/open audio files.
+struct DirectoryStamp: Codable, Equatable {
+    var path: String
+    var modified: Date
+    var identity: String
+    static func read(root: URL, path: String) throws -> DirectoryStamp {
+        let canonical = root.resolvingSymlinksInPath().standardizedFileURL
+        let url = path.isEmpty ? canonical : try LocalFilePolicy.musicFile(path, in: canonical)
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey, .fileResourceIdentifierKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true,
+              let modified = values.contentModificationDate, let identity = values.fileResourceIdentifier else { throw CocoaError(.fileReadUnknown) }
+        return DirectoryStamp(path: path, modified: modified, identity: String(describing: identity))
+    }
+}
+struct ScanCheckpoint: Codable {
+    var sourceID: UUID
+    var excludedPaths: [String]
+    var directories: [DirectoryStamp]
+}
+
 actor LibraryScanner {
     private var manifestCache: [String: (fingerprint: String, result: M3UParseResult)] = [:]
     static let extensions: Set<String> = ["mp3", "m4a", "aac", "alac", "wav", "aiff", "aif", "flac", "ogg", "opus"]
+    func directoriesChanged(root: URL, checkpoint: ScanCheckpoint) throws -> Bool {
+        guard !checkpoint.directories.isEmpty else { return true }
+        for previous in checkpoint.directories {
+            try Task.checkCancellation()
+            guard let current = try? DirectoryStamp.read(root: root, path: previous.path), current == previous else { return true }
+        }
+        return false
+    }
     func scan(root: URL, sourceID: UUID, existing: [String: Track], cache: URL, excluded: [String] = [],
               checked: @escaping @Sendable (Int) async -> Void = { _ in },
               progress: @escaping @Sendable ([Track], Int) async -> Void) async throws -> ScanResult {
         let scanRoot = root.resolvingSymlinksInPath().standardizedFileURL
         try LocalFilePolicy.check(root)
+        let rootStamp = try? DirectoryStamp.read(root: scanRoot, path: "")
+        var directories = rootStamp.map { [$0] } ?? []
+        var directoryCheckReliable = rootStamp != nil
         // POSIX isReadableFile can reject provider-backed folders before coordination.
         // Ask the provider for a directory read while the selected security scope is held.
         var coordinationError: NSError?, directoryError: Error?
@@ -51,21 +86,29 @@ actor LibraryScanner {
         }
         if let error = coordinationError ?? (directoryError as NSError?) { throw error }
         var issues: [String] = []
+        var complete = true
         guard let enumerator = FileManager.default.enumerator(at: scanRoot,
-            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey, .volumeIdentifierKey, .fileSizeKey, .contentModificationDateKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey, .volumeIdentifierKey, .fileSizeKey, .contentModificationDateKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants], errorHandler: { url, error in
-                issues.append("\(url.lastPathComponent): \(error.localizedDescription)"); return true
+                complete = false
+                if issues.count < 20 { issues.append("\(url.lastPathComponent): \(error.localizedDescription)") }; return true
             }) else { throw CocoaError(.fileReadUnknown) }
         var playlists: [ScannedPlaylist] = []
         var tracks: [Track] = [], batch: [Track] = [], seen = Set<String>(), skipped = 0, count = 0
+        var lastProgress = ProcessInfo.processInfo.systemUptime
         while let file = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
             let previousCount = count
             do {
                 let relativePath = String(file.resolvingSymlinksInPath().path.dropFirst(scanRoot.path.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 if excluded.contains(where: { relativePath == $0 || relativePath.hasPrefix($0 + "/") }) { enumerator.skipDescendants(); continue }
-                let attributes = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey, .volumeIdentifierKey, .fileSizeKey, .contentModificationDateKey])
+                let attributes = try file.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey, .volumeIdentifierKey, .fileSizeKey, .contentModificationDateKey])
                 if attributes.isSymbolicLink == true { enumerator.skipDescendants(); continue }
+                if attributes.isDirectory == true {
+                    if let stamp = try? DirectoryStamp.read(root: scanRoot, path: relativePath) { directories.append(stamp) }
+                    else { directoryCheckReliable = false }
+                    continue
+                }
                 guard attributes.isRegularFile == true else { continue }
                 if ["m3u", "m3u8"].contains(file.pathExtension.lowercased()) {
                     try LocalFilePolicy.check(file)
@@ -106,15 +149,18 @@ actor LibraryScanner {
                 if let index = track.locations.firstIndex(where: { $0.sourceID == sourceID }) { track.locations[index] = location }
                 else { track.locations.append(location) }
                 seen.insert(identity)
-                tracks.append(track); batch.append(track)
+                tracks.append(track)
+                if existing[identity] != track { batch.append(track) }
                 if batch.count == 25 { await progress(batch, count); batch.removeAll() }
             } catch is CancellationError { throw CancellationError() }
-            catch { skipped += 1; if issues.count < 20 { issues.append("\(file.lastPathComponent): \(error.localizedDescription)") } }
-            if count > previousCount { await checked(count) }
+            catch { complete = false; skipped += 1; if issues.count < 20 { issues.append("\(file.lastPathComponent): \(error.localizedDescription)") } }
+            if count > previousCount && ProcessInfo.processInfo.systemUptime - lastProgress >= 0.25 {
+                await checked(count); lastProgress = ProcessInfo.processInfo.systemUptime
+            }
         }
         if !batch.isEmpty { await progress(batch, count) }
         await checked(count)
-        return ScanResult(tracks: tracks, seen: seen, skipped: skipped, issues: issues, playlists: playlists)
+        return ScanResult(tracks: tracks, seen: seen, skipped: skipped, issues: issues, playlists: playlists, complete: complete, directories: directories, directoryCheckReliable: directoryCheckReliable)
     }
 
     private func metadata(_ url: URL, id: String, fingerprint: String, cache: URL) async throws -> Track {
@@ -183,13 +229,15 @@ actor LibraryScanner {
         let album = value(.commonKeyAlbumName) ?? "Unknown Album"
         var artwork: String?
         if let data = items.first(where: { $0.commonKey == .commonKeyArtwork })?.dataValue,
-           data.count < 15_000_000, let image = UIImage(data: data) {
-            let format = UIGraphicsImageRendererFormat(); format.scale = 1
-            let thumbnail = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 320), format: format).image { _ in
-                let factor = max(320 / image.size.width, 320 / image.size.height)
-                let size = CGSize(width: image.size.width * factor, height: image.size.height * factor)
-                image.draw(in: CGRect(x: (320 - size.width) / 2, y: (320 - size.height) / 2, width: size.width, height: size.height))
-            }
+           data.count < 15_000_000,
+           let source = CGImageSourceCreateWithData(data as CFData, nil),
+           let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+               kCGImageSourceCreateThumbnailFromImageAlways: true,
+               kCGImageSourceCreateThumbnailWithTransform: true,
+               kCGImageSourceThumbnailMaxPixelSize: 320,
+               kCGImageSourceShouldCacheImmediately: true
+           ] as CFDictionary) {
+            let thumbnail = UIImage(cgImage: image)
             let name = UUID().uuidString + ".jpg"
             if let jpg = thumbnail.jpegData(compressionQuality: 0.8) { try jpg.write(to: cache.appendingPathComponent(name), options: .atomic); artwork = name }
         }

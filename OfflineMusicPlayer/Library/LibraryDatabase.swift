@@ -25,6 +25,7 @@ final class LibraryDatabase {
             let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             description.url = storeURL ?? base.appendingPathComponent("PocketMusic.sqlite")
         }
+        description.setOption(FileProtectionType.completeUntilFirstUserAuthentication as NSObject, forKey: NSPersistentStoreFileProtectionKey)
         description.shouldAddStoreAsynchronously = false
         description.shouldMigrateStoreAutomatically = true
         description.shouldInferMappingModelAutomatically = true

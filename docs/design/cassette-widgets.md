@@ -1,6 +1,6 @@
 # Cassette branding and widgets
 
-Date: 12 October 2026. Packaged release **1.3.0 (9)**. Both iPod IPA/ZIP and local Mac .app/ZIP passed validation. No push or installation was performed. See [build receipt](../testing/verification/final-build.md).
+Updated 13 October 2026 for widget recovery and the designer-provided retro rainbow mark. Current package validation is recorded in [build receipt](../testing/verification/final-build.md).
 
 ## Selected design
 
@@ -20,9 +20,9 @@ Settings → Playback → Widgets previews both native card layouts and explains
 
 ## Snapshot and performance
 
-`WidgetSnapshotStore` writes only title, artist and a generated cover filename to the App Group `group.com.local.offlinemusicplayer`. No audio, bookmarks, favorites, playlists or private database is copied. Covers reuse the app’s already-downsampled local JPEG, at most 2 MB; only the latest and one preceding image are retained. JSON reads are limited to 64 KB, unsafe paths/symlinks are rejected, and unchanged snapshot writes are suppressed.
+`WidgetSnapshotStore` writes only title, artist and a generated cover filename to the App Group `group.com.local.offlinemusicplayer`. No audio, bookmarks, favorites, playlists or private database is copied. Covers reuse the app’s already-downsampled local JPEG, at most 2 MB; only the latest and one preceding image are retained. The extension independently downsamples to at most 320 pixels and rejects symlink/oversized artwork. Cover failures preserve text and the music-note fallback. Shared writes use after-first-unlock protection on iOS. JSON reads are limited to 64 KB, unsafe paths/symlinks are rejected, and unchanged snapshot writes are suppressed.
 
-The provider has a single-entry `.never` timeline. Changed metadata triggers `reloadTimelines(ofKind:)`; system timing remains controlled by WidgetKit. Updates happen when the track changes or indexed metadata changes (debounced), never from progress ticks or Play/Pause. Superseded publication tasks cancel before writing. No widget network calls, timers, scanning, audio decoding or continuous blur. See [Apple’s timeline guidance](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date).
+The provider has a single-entry timeline with a requested retry after 30 minutes. Changed metadata triggers `reloadTimelines(ofKind:)`; app launch and manual Refresh Widgets force recovery even for unchanged metadata. System timing remains controlled by WidgetKit. Updates happen when the track changes or indexed metadata changes (debounced), never from progress ticks or Play/Pause. Superseded publication tasks cancel before committing their snapshot. No widget network calls, in-process polling timers, scanning, audio decoding or continuous blur. See [Apple’s timeline guidance](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date).
 
 ## Signing and App Groups
 
@@ -44,11 +44,7 @@ The display name is **Cassette**. The user’s exact GitHub repository spelling 
 
 App icon: `OfflineMusicPlayer/Assets.xcassets/AppIcon.appiconset/AppIcon.png`, opaque 1024×1024. Widget mark: a 64px version in both app/widget asset catalogs. Existing artwork/icon references are preserved under `docs/design/assets/`; original HTML references remain untouched.
 
-Built-in ImageGen prompt used for the installed icon:
-
-> Create the final production iOS app icon for an offline music player newly named Cassette. Single square 1024x1024 icon image, fully opaque edge-to-edge background, absolutely no transparent pixels, no external margins, no rounded outer-square mask (iOS supplies its own), no text or lettering, no watermark, no phone or mockup. Main mark: a clean modern minimalist audio cassette tape, immediately recognizable even at 40px. Horizontal rectangular cassette with softly rounded internal corners, warm ivory body, two bold dark circular reels with clear centers and a short dark tape-window connector between them, a simple inset trapezoid lower tape area. Balanced generous silhouette occupies about70% ofwidth centered slightlyabove middle. A narrow coral-orange label stripe across upper portion and restrained muted teal details reference the app's existing warmth. Background: deep midnight navy with very subtle smooth teal illumination behind tape, no busytexture. Modern Apple-quality icon craft, geometric near-flat construction with extremely restrained soft depth on the object only, crisp boldedges and sufficient contrast. More modern than literal retro photography, tactile and sophisticated without tiny screws or dense details. Reels and dark tape shape should read clearly, no headphones, no bunker arch, no music note. The cassette tape shape is the entire brand; avoid extra decoration. Native iOS icon for a compact iPod touch screen. Currentdate12October2026 irrelevant toimage, no datevisible.
-
-The generated original was converted with `sips -z 1024 1024` for the app icon and `sips -z 64 64` for the widget mark. No runtime rendering/animation is used for the icon.
+The current artwork was supplied by the designer on 13 October 2026: [original PNG](assets/retro-rainbow-cassette-original.png). It replaces the earlier ivory/coral mark. The 1254px original is preserved byte-for-byte, with its full background and framing. `sips -z 1024 1024` produces the opaque app/README icon; `sips -z 64 64` produces identical marks for app and extension. No generated alternative, recoloring or cropping is used.
 
 ## Executed QA
 
@@ -59,3 +55,7 @@ The generated original was converted with `sips -z 1024 1024` for the app icon a
 - Regression coverage: persisted snapshots, duplicate-write suppression, missing-group fallback, bounded image retention/oversized covers, invalid/oversized JSON, unsafe artwork paths, known-only deep links, and native square/horizontal/empty renders.
 
 Actual iPod Home Screen rendering, group provisioning, timeline scheduling, device taps, VoiceOver and battery use remain physical-device checks. Desktop card renders and successful extension compilation do not prove widget installation or OS timeline behavior.
+
+## Black-widget recovery — 13 October 2026
+
+Settings → Widgets now exposes shared-storage status and Refresh Widgets. Launch restoration forces publication/reload; missing/corrupt empty snapshots are repaired. Both empty sizes retain visible fallback content. Missing App Groups explain unavailable track data, but do not by themselves explain an entirely black card. Actual extension launch/signing and on-device rendering remain unverified. See [recovery findings and physical acceptance](../testing/verification/widget-recovery-qa.md).

@@ -7,7 +7,7 @@ Source requirements: [product specification](../product/offline-music-player-spe
 - Native iOS 15-targeted Xcode app, branded Cassette with an app icon; no shipped demo/test audio.
 - Library home, songs, albums/details, artists, genres, source/folder browsing, search, playlists/favorites, Settings, mini-player and full-screen Now Playing based on the supplied prototype.
 - Core Data index, app-owned Documents scan, external folder bookmarks, file import, cancellation/progress, fingerprints, overlapping-root identities and unavailable-file preservation.
-- Automatic scan on opening/foreground; persisted source disable switches and subfolder exclusions.
+- Persistent owned-directory checkpoint checks at launch, idle-only automatic scans when changed, scoped import/source rescans and explicit manual rescans; no unlock/foreground rescans. Persisted source disable switches and subfolder exclusions.
 - Native audio engine, queues, play-next/add-to-queue, previous/next, shuffle/repeat, system media metadata/commands, interruption/route handling and silent restoration.
 - Editable local playlists and local plain/LRC lyrics. Artwork thumbnails and bounded caches.
 - Reproducible Release IPA plus outer ZIP workflow, saved in repository instructions.
@@ -75,3 +75,7 @@ Both `./build --platform=ipod` and `./build --platform=mac` passed end-to-end va
 
 - [x] Align every Library category count to the trailing edge, before the navigation chevron.
 - [x] Apply the same trailing-count alignment to playlist song counts.
+
+## Reliability, widgets and designer branding — 13 October 2026
+
+Implemented scan throttling/change-only merges and bounded artwork decoding, lock-access/session hardening, queue-aware sleep timer, Settings deduplication, widget snapshot recovery/status and timeline retries. The latest user-supplied retro rainbow logo replaces all active production icon/mark assets and current branding references; original design history remains intact. README documents local media discovery and manual Files/Finder rescan behavior. Native suite: 48 tests; after logo replacement, all six widget tests and current card renders passed again. Physical lock-screen termination and black-widget reproduction remain open, including Sideloadly extension provisioning checks. See [reliability plan](../product/library-reliability-and-sleep-timer.md) and [widget QA](../testing/verification/widget-recovery-qa.md).
